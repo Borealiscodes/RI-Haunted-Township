@@ -41,15 +41,7 @@
     <button id="chime-btn" class="accent">🔔 Chime</button>
     <button id="gate-btn" class="accent">🚪 Gate</button>
     <button id="narrate-btn">🎙️ Narrate</button>
-    <button id="audio-btn">🎻 Audio</button>
-    <button id="song-btn" class="accent">🎵 Next Song</button>
-    <select id="track-select">
-      <option value="AUTO">OST: Auto (District)</option>
-      <option value="HARBOR">I. Blackwater Mist</option>
-      <option value="ORGAN">II. Chapel Pipe Organ</option>
-      <option value="CALLIOPE">III. Pier Calliope Waltz</option>
-      <option value="DANMAKU">IV. Midnight Toccata</option>
-    </select>
+    <button id="audio-btn">🎹 Organ OST</button>
   </div>
   <div id="arena-controls" class="controls" style="display:none;">
     <button id="a-left">◀</button>
@@ -298,7 +290,7 @@
       if (newLore) { logBar.textContent = newLore; narrate(newLore); }
 
       const trackKey = arena.active ? 'DANMAKU' : zoneKey === 'CANOPY' ? 'ORGAN' : zoneKey === 'MILL' ? 'CALLIOPE' : 'HARBOR';
-      const trackName = sound.setAutoTrack(trackKey);
+      const trackName = sound.setAutoTrack();
 
       canopy.step(tick, px, world.player.y);
       fluidFog.step(px, world.player.y, world.cameraX, tick);
