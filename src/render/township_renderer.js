@@ -7,27 +7,26 @@ export const FB_HEIGHT = 272;
 
 const BAYER_4X4 = Uint8Array.of(0,8,2,10, 12,4,14,6, 3,11,1,9, 15,7,13,5);
 
-// 8 Scenic Material Banks (32 shades each = 256 CLUT8 colors!)
-const B_SKY = 0;        // Midnight Starry Indigo
-const B_SEA = 32;       // Stormy Atlantic Teal
-const B_WOOD = 64;      // Weathered Cedar & Burlap Ochre
-const B_IVORY = 96;     // Colonial Clapboard Ivory & Stone
-const B_PINE = 128;     // Haunted Evergreen & Coastal Moss
-const B_AMBER = 160;    // Lantern Gold & Glowing Windows
-const B_CRIMSON = 192;  // Crimson Raincoat & Brick Chimneys
-const B_ASTRAL = 224;   // Amethyst Chimes & Eldritch Glow
+const B_SKY = 0;
+const B_SEA = 32;
+const B_WOOD = 64;
+const B_IVORY = 96;
+const B_PINE = 128;
+const B_AMBER = 160;
+const B_CRIMSON = 192;
+const B_ASTRAL = 224;
 
 export function buildTownshipCLUT8() {
   const lut = new Uint32Array(256);
   const banks = Array.of(
-    Array.of(26, 38, 92),    // 0: Sky Indigo
-    Array.of(24, 96, 118),   // 1: Atlantic Teal
-    Array.of(138, 92, 54),   // 2: Cedar Wood / Burlap
-    Array.of(214, 208, 192), // 3: Clapboard Ivory / Stone
-    Array.of(28, 78, 56),    // 4: Coastal Evergreen
-    Array.of(255, 196, 58),  // 5: Lantern Amber
-    Array.of(212, 42, 62),   // 6: Crimson Coat / Brick
-    Array.of(178, 86, 245)   // 7: Astral Amethyst
+    Array.of(26, 38, 92),
+    Array.of(24, 96, 118),
+    Array.of(138, 92, 54),
+    Array.of(214, 208, 192),
+    Array.of(28, 78, 56),
+    Array.of(255, 196, 58),
+    Array.of(212, 42, 62),
+    Array.of(178, 86, 245)
   );
   for (let b = 0; b < 8; b++) {
     const r0 = banks.at(b).at(0), g0 = banks.at(b).at(1), b0 = banks.at(b).at(2);
@@ -49,25 +48,29 @@ export class TownshipFramebuffer {
     this.rgba32 = new Uint32Array(FB_WIDTH * FB_HEIGHT);
   }
 
-  drawStitchedLine(x0, y0, x1, y1, c) {
-    const steps = Math.max(1, (Math.hypot(x1 - x0, y1 - y0) / 5) | 0);
-    for (let i = 0; i < steps; i += 2) {
-      const ax = (x0 + ((x1 - x0) * i) / steps) | 0;
-      const ay = (y0 + ((y1 - y0) * i) / steps) | 0;
-      const bx = (x0 + ((x1 - x0) * (i + 1)) / steps) | 0;
-      const by = (y0 + ((y1 - y0) * (i + 1)) / steps) | 0;
-      this.drawLine(ax, ay, bx, by, c);
+  /** Fill horizontal gradient rectangle for 2.5D cylindrical/architectural shading */
+  fillShadedRect(x0, y0, x1, y1, bank, shadeLeft, shadeRight) {
+    const w = Math.max(1, x1 - x0);
+    for (let y = Math.max(0, y0); y <= Math.min(FB_HEIGHT - 1, y1); y++) {
+      const row = y * FB_WIDTH;
+      const bRow = (y & 3) << 2;
+      for (let x = Math.max(0, x0); x <= Math.min(FB_WIDTH - 1, x1); x++) {
+        const s = shadeLeft + (((shadeRight - shadeLeft) * (x - x0)) / w | 0);
+        const dither = BAYER_4X4[bRow + (x & 3)] >> 3;
+        this.indices[row + x] = bank + q16Clamp(s + dither, 1, 31);
+      }
     }
   }
 
-  renderWorld(state, tick) {
-    const camX = state.cameraX | 0;
-    const pxScreen = (state.playerX - camX) | 0;
-    const pyScreen = state.playerY | 0;
-    const lanternR = state.hasTuningFork ? 140 : 100;
+  renderWorld(world, extra, tick) {
+    const p = world.player;
+    const camX = world.cameraX | 0;
+    const pxScreen = (p.x - camX) | 0;
+    const pyScreen = p.y | 0;
+    const lanternR = (p.hidden ? 45 : (extra.hasTuningFork ? 140 : 100));
     const lanternRSq = lanternR * lanternR;
 
-    // 1. Multi-Material Background: Starry Indigo Sky + Cobblestone Street + Atlantic Sea
+    // 1. Starry Indigo Sky + Cobblestone Street + Stormy Atlantic Surf
     for (let y = 0; y < FB_HEIGHT; y++) {
       const row = y * FB_WIDTH;
       const bRow = (y & 3) << 2;
@@ -81,53 +84,33 @@ export class TownshipFramebuffer {
         const dither = BAYER_4X4[bRow + (x & 3)] >> 2;
 
         if (y < 218) {
-          // Starry Indigo Sky with burlap weave & swirling Van Gogh gradient
           const swirl = ((q16Sin(((wx * 700) + (y * 1200) + (tick * 800)) % Q16_TAU) * 4) >> 16);
           const weave = ((wx & 3) === 0 || (y & 3) === 0) ? 2 : 0;
-          let shade = q16Clamp(8 + ((y >> 4)) + swirl + weave + dither, 3, 24);
+          const shade = q16Clamp(8 + (y >> 4) + swirl + weave + dither, 3, 24);
           if (d2 < lanternRSq) {
-            // Warm Amber Lantern Halo illuminating the night air
             const boost = 14 - (((d2 * 14) / lanternRSq) | 0);
             this.indices[row + x] = B_AMBER + q16Clamp(6 + boost + dither, 4, 24);
           } else {
             this.indices[row + x] = B_SKY + shade;
           }
         } else if (y < 236) {
-          // Cobblestone & Cedar Boardwalk
           const mortar = (((y & 5) === 0) || (((wx + ((y >> 2) * 7)) & 15) === 0)) ? -4 : 0;
           const lit = d2 < lanternRSq ? 8 : 0;
           this.indices[row + x] = B_WOOD + q16Clamp(12 + mortar + lit + dither, 3, 26);
         } else {
-          // Stormy Atlantic Teal Ocean with animated wave crests
           const wave = ((q16Sin(((wx * 1800) + (y * 2400) + (tick * 2400)) % Q16_TAU) * 5) >> 16);
           this.indices[row + x] = B_SEA + q16Clamp(14 + wave + dither, 4, 28);
         }
       }
     }
 
-    // 2. Swirling Starry Moon & Golden Star Halos
+    // 2. Swirling Crescent Moon & Star Halos
     const moonX = 385 - ((camX >> 3) % 90);
     const moonY = 42;
     this.fillCircle(moonX, moonY, 12, B_AMBER + 28);
     this.fillCircle(moonX + 5, moonY - 3, 10, B_SKY + 9);
-    for (let s = 0; s < 8; s++) {
-      const a0 = (((tick * 1100) + s * 51472) % Q16_TAU);
-      const a1 = (a0 + 26000) % Q16_TAU;
-      this.drawLine(
-        moonX + ((21 * q16Cos(a0)) >> 16), moonY + ((11 * q16Sin(a0)) >> 16),
-        moonX + ((21 * q16Cos(a1)) >> 16), moonY + ((11 * q16Sin(a1)) >> 16),
-        B_AMBER + 22
-      );
-    }
 
-    for (const st of Array.of({ x: 70, y: 30 }, { x: 185, y: 52 }, { x: 275, y: 26 }, { x: 445, y: 58 })) {
-      const sx = ((st.x - (camX >> 2)) + 480) % 480;
-      const pulse = (tick >> 3) & 3;
-      this.fillRect(sx - 1, st.y - 1, sx + 1, st.y + 1, B_AMBER + 31);
-      this.drawCircleOutline(sx, st.y, 6 + pulse, B_AMBER + 18, 12);
-    }
-
-    // 3. Solid Filled Coastal Hills & Layered Evergreen Pine Forest
+    // 3. Shaded Evergreen Pines (Lit Left Facet + Shadowed Right Facet + Ground Shadow)
     for (let sx = 0; sx < FB_WIDTH; sx += 4) {
       const wx = sx + (camX >> 1);
       const hy = 158 + ((q16Sin((wx * 850) % Q16_TAU) * 16) >> 16);
@@ -137,83 +120,75 @@ export class TownshipFramebuffer {
     for (let tx = 65; tx < 1890; tx += 135) {
       const sx = tx - camX;
       if (sx < -35 || sx > FB_WIDTH + 35) continue;
-      // Cedar trunk + 3 stacked evergreen bough triangles
-      this.fillRect(sx - 3, 198, sx + 3, 217, B_WOOD + 9);
-      this.fillTri({ x: sx, y: 146 }, { x: sx - 16, y: 174 }, { x: sx + 16, y: 174 }, B_PINE + 16);
-      this.fillTri({ x: sx, y: 162 }, { x: sx - 20, y: 190 }, { x: sx + 20, y: 190 }, B_PINE + 14);
-      this.fillTri({ x: sx, y: 178 }, { x: sx - 24, y: 204 }, { x: sx + 24, y: 204 }, B_PINE + 12);
+      this.fillRect(sx - 20, 217, sx + 22, 220, B_WOOD + 3); // Ground drop shadow
+      this.fillShadedRect(sx - 3, 198, sx + 3, 217, B_WOOD, 14, 6);
+      for (let tier = 0; tier < 3; tier++) {
+        const ty = 146 + tier * 16;
+        const w = 16 + tier * 4;
+        // Split each pine tier into sunlit left triangle & shadowed right triangle
+        this.fillTri({ x: sx, y: ty }, { x: sx - w, y: ty + 28 }, { x: sx, y: ty + 28 }, B_PINE + 20);
+        this.fillTri({ x: sx, y: ty }, { x: sx, y: ty + 28 }, { x: sx + w, y: ty + 28 }, B_PINE + 10);
+      }
     }
-    // 4. Blackwater Lighthouse (White & Crimson Striped Tower + Sweeping Golden Beacon)
+    // 4. Cylindrically Shaded Blackwater Lighthouse (x = 95)
     const lhSx = 95 - camX;
     if (lhSx > -180 && lhSx < FB_WIDTH + 180) {
-      this.fillTri({ x: lhSx - 8, y: 94 }, { x: lhSx - 16, y: 217 }, { x: lhSx + 16, y: 217 }, B_IVORY + 24);
-      this.fillTri({ x: lhSx - 8, y: 94 }, { x: lhSx + 8, y: 94 }, { x: lhSx + 16, y: 217 }, B_IVORY + 22);
-      // Crimson lighthouse bands
-      this.fillRect(lhSx - 12, 134, lhSx + 12, 152, B_CRIMSON + 20);
-      this.fillRect(lhSx - 14, 178, lhSx + 14, 196, B_CRIMSON + 20);
-      // Lantern gallery & crimson dome
-      this.fillRect(lhSx - 9, 80, lhSx + 9, 94, B_AMBER + 29);
-      this.fillTri({ x: lhSx, y: 66 }, { x: lhSx - 11, y: 80 }, { x: lhSx + 11, y: 80 }, B_CRIMSON + 22);
-      // Sweeping golden light beam
+      this.fillTri({ x: lhSx - 8, y: 94 }, { x: lhSx - 16, y: 217 }, { x: lhSx, y: 217 }, B_IVORY + 27);
+      this.fillTri({ x: lhSx - 8, y: 94 }, { x: lhSx + 8, y: 94 }, { x: lhSx, y: 217 }, B_IVORY + 24);
+      this.fillTri({ x: lhSx + 8, y: 94 }, { x: lhSx, y: 217 }, { x: lhSx + 16, y: 217 }, B_IVORY + 14);
+      this.fillShadedRect(lhSx - 12, 134, lhSx + 12, 152, B_CRIMSON, 25, 11);
+      this.fillShadedRect(lhSx - 14, 178, lhSx + 14, 196, B_CRIMSON, 25, 11);
+      this.fillShadedRect(lhSx - 9, 80, lhSx + 9, 94, B_AMBER, 31, 20);
+      this.fillTri({ x: lhSx, y: 66 }, { x: lhSx - 11, y: 80 }, { x: lhSx, y: 80 }, B_CRIMSON + 26);
+      this.fillTri({ x: lhSx, y: 66 }, { x: lhSx, y: 80 }, { x: lhSx + 11, y: 80 }, B_CRIMSON + 12);
       const sweep = ((q16Sin((tick * 1500) % Q16_TAU) * 155) >> 16);
       this.drawLine(lhSx, 87, lhSx + sweep, 44, B_AMBER + 26);
-      this.drawLine(lhSx, 87, lhSx + sweep, 62, B_AMBER + 22);
-      this.drawLine(lhSx, 87, lhSx + sweep, 80, B_AMBER + 26);
+      this.drawLine(lhSx, 87, lhSx + sweep, 64, B_AMBER + 22);
     }
 
-    // 5. Harbor Schooner Hull, Mast & Stitched Sail (x = 250)
-    const shipSx = 250 - camX;
-    if (shipSx > -80 && shipSx < FB_WIDTH + 80) {
-      this.fillTri({ x: shipSx - 34, y: 212 }, { x: shipSx + 34, y: 212 }, { x: shipSx + 22, y: 232 }, B_WOOD + 14);
-      this.fillTri({ x: shipSx - 34, y: 212 }, { x: shipSx - 22, y: 232 }, { x: shipSx + 22, y: 232 }, B_WOOD + 12);
-      this.fillRect(shipSx - 2, 114, shipSx + 2, 212, B_WOOD + 18);
-      this.fillTri({ x: shipSx + 2, y: 120 }, { x: shipSx + 2, y: 196 }, { x: shipSx + 32, y: 196 }, B_IVORY + 20);
-      this.drawStitchedLine(shipSx + 2, 120, shipSx + 32, 196, B_CRIMSON + 22);
-    }
-
-    // 6. Solid Colonial Clapboard Houses (Gambrel Cedar Roofs, Brick Chimneys & Glowing Amber Windows)
+    // 5. Shaded Colonial Gambrel Houses + Recessed Stealth Doorways
     for (const hx of Array.of(480, 660, 890, 1370, 1650)) {
       const sx = hx - camX;
       if (sx < -65 || sx > FB_WIDTH + 65) continue;
-      // Brick chimney
-      this.fillRect(sx + 14, 102, sx + 22, 124, B_CRIMSON + 16);
-      // Clapboard Ivory body
-      this.fillRect(sx - 32, 144, sx + 32, 217, B_IVORY + 21);
-      for (let py = 152; py < 217; py += 8) this.drawLine(sx - 32, py, sx + 32, py, B_IVORY + 15);
-      // Cedar Gambrel Roof
-      this.fillTri({ x: sx - 20, y: 118 }, { x: sx - 36, y: 144 }, { x: sx + 36, y: 144 }, B_WOOD + 13);
-      this.fillTri({ x: sx - 20, y: 118 }, { x: sx + 20, y: 118 }, { x: sx + 36, y: 144 }, B_WOOD + 15);
-      this.drawStitchedLine(sx - 36, 144, sx + 36, 144, B_AMBER + 24);
-      // Cedar front door + glowing warm amber windows
-      this.fillRect(sx - 5, 188, sx + 5, 217, B_WOOD + 10);
-      for (const wx of Array.of(sx - 18, sx + 18)) {
+      this.fillRect(sx - 34, 217, sx + 38, 221, B_WOOD + 2); // Ground shadow
+      this.fillShadedRect(sx + 14, 102, sx + 22, 124, B_CRIMSON, 22, 10); // Chimney
+      // Left-to-right shaded clapboard walls
+      this.fillShadedRect(sx - 32, 144, sx + 32, 217, B_IVORY, 25, 13);
+      for (let py = 152; py < 217; py += 8) this.drawLine(sx - 32, py, sx + 32, py, B_IVORY + 10);
+      // Shaded Gambrel Roof + Deep Eave Shadow underneath
+      this.fillTri({ x: sx - 20, y: 118 }, { x: sx - 36, y: 144 }, { x: sx, y: 144 }, B_WOOD + 20);
+      this.fillTri({ x: sx - 20, y: 118 }, { x: sx + 20, y: 118 }, { x: sx, y: 144 }, B_WOOD + 17);
+      this.fillTri({ x: sx + 20, y: 118 }, { x: sx, y: 144 }, { x: sx + 36, y: 144 }, B_WOOD + 9);
+      this.fillRect(sx - 32, 144, sx + 32, 147, B_WOOD + 4); // Eave shadow
+      // Deep shadow doorway (stealth hiding spot!)
+      this.fillRect(sx - 10, 180, sx + 10, 217, B_SKY + 1);
+      this.drawRectOutline(sx - 10, 180, sx + 10, 217, B_WOOD + 16);
+      // Glowing amber windows with shadowed frames
+      for (const wx of Array.of(sx - 20, sx + 20)) {
         this.fillRect(wx - 6, 158, wx + 6, 174, B_AMBER + 28);
         this.drawLine(wx, 158, wx, 174, B_WOOD + 8);
         this.drawLine(wx - 6, 166, wx + 6, 166, B_WOOD + 8);
       }
     }
 
-    // 7. Bell-Tower Belfry (1110m) & Turning Old Mill Waterwheel (1540m)
-    const towerSx = 1110 - camX;
-    if (towerSx > -140 && towerSx < FB_WIDTH + 140) {
-      this.fillRect(towerSx - 108, 76, towerSx + 108, 86, B_WOOD + 14);
-      this.fillTri({ x: towerSx, y: 26 }, { x: towerSx - 108, y: 76 }, { x: towerSx + 108, y: 76 }, B_IVORY + 18);
-      this.drawStitchedLine(towerSx - 108, 76, towerSx + 108, 76, B_AMBER + 26);
+    // 6. Elevated Platform Ledges & Pushable Cedar Crates
+    for (const plat of world.platforms) {
+      const sx = plat.x - camX;
+      if (sx + plat.w < -10 || sx > FB_WIDTH + 10) continue;
+      this.fillShadedRect(sx, plat.y, sx + plat.w, plat.y + plat.h, B_WOOD, 22, 12);
+      this.fillRect(sx, plat.y + plat.h, sx + plat.w, plat.y + plat.h + 3, B_SKY + 2);
     }
 
-    const wheelSx = 1540 - camX;
-    if (wheelSx > -60 && wheelSx < FB_WIDTH + 60) {
-      this.drawCircleOutline(wheelSx, 184, 28, B_WOOD + 20, 16);
-      this.drawCircleOutline(wheelSx, 184, 20, B_WOOD + 16, 16);
-      for (let sp = 0; sp < 4; sp++) {
-        const a = (((tick * 1200) + sp * 102944) % Q16_TAU);
-        const dx = (28 * q16Cos(a)) >> 16, dy = (28 * q16Sin(a)) >> 16;
-        this.drawLine(wheelSx - dx, 184 - dy, wheelSx + dx, 184 + dy, B_WOOD + 22);
-      }
+    for (const c of world.crates) {
+      const sx = c.x - camX;
+      if (sx + c.w < -10 || sx > FB_WIDTH + 10) continue;
+      this.fillShadedRect(sx, c.y, sx + c.w, c.y + c.h, B_WOOD, 24, 11);
+      this.drawRectOutline(sx, c.y, sx + c.w, c.y + c.h, B_WOOD + 28);
+      this.drawLine(sx, c.y, sx + c.w, c.y + c.h, B_WOOD + 16);
     }
 
-    // 8. Verlet Cloth Ribbons & Pentatonic Bronze Chimes
-    for (const rib of state.canopy.ribbons) {
+    // 7. Verlet Ribbons, Pentatonic Chimes, Faction Stalls & Amber Shards
+    for (const rib of extra.canopy.ribbons) {
       for (let i = 1; i < rib.pts.length; i++) {
         const a = rib.pts.at(i - 1), b = rib.pts.at(i);
         const ax = (a.x - camX) | 0, bx = (b.x - camX) | 0;
@@ -228,50 +203,63 @@ export class TownshipFramebuffer {
       const sx = ch.x - camX;
       if (sx < -20 || sx > FB_WIDTH + 20) continue;
       const sway = ((q16Sin(((tick + ch.id * 11) * 2600) % Q16_TAU) * 3) >> 16);
-      const col = state.canopy.solved ? (B_PINE + 28) : (B_AMBER + 28);
+      const col = extra.canopy.solved ? (B_PINE + 28) : (B_AMBER + 28);
       this.drawLine(sx, 86, sx + sway, 134, B_IVORY + 24);
       this.fillRect(sx + sway - 3, 134, sx + sway + 3, 148, col);
     }
 
-    // 9. Faction Guild Stalls, Amber Shards, Foes & Manor Gate
     for (const fac of Object.values(FACTIONS)) {
       const sx = fac.x - camX;
       if (sx < -30 || sx > FB_WIDTH + 30) continue;
-      this.fillRect(sx - 14, 182, sx + 14, 217, B_WOOD + 15);
-      this.fillTri({ x: sx, y: 164 }, { x: sx - 18, y: 182 }, { x: sx + 18, y: 182 }, B_CRIMSON + 22);
-      this.fillRect(sx - 4, 174, sx + 4, 180, B_AMBER + 30);
+      this.fillShadedRect(sx - 14, 182, sx + 14, 217, B_WOOD, 22, 10);
+      this.fillTri({ x: sx, y: 164 }, { x: sx - 18, y: 182 }, { x: sx + 18, y: 182 }, B_CRIMSON + 24);
     }
 
-    for (const node of state.nodes) {
+    for (const node of world.nodes) {
       if (node.collected) continue;
       const sx = node.x - camX;
       if (sx < -20 || sx > FB_WIDTH + 20) continue;
       const bob = ((q16Sin((tick * 3400) % Q16_TAU) * 2) >> 16);
-      this.fillCircle(sx, 205 + bob, 4, B_AMBER + 30);
-      this.drawCircleOutline(sx, 205 + bob, 6, B_AMBER + 20, 10);
+      this.fillCircle(sx, node.y + bob, 4, B_AMBER + 30);
+      this.drawCircleOutline(sx, node.y + bob, 6, B_AMBER + 20, 10);
     }
 
-    for (const foe of state.foes) {
-      if (!foe.alive) continue;
-      const sx = (foe.x - camX) | 0;
-      if (sx < -30 || sx > FB_WIDTH + 30) continue;
-      this.fillTri({ x: sx, y: 164 }, { x: sx - 14, y: 217 }, { x: sx + 14, y: 217 }, B_ASTRAL + 16);
-      this.fillCircle(sx, 158, 6, B_CRIMSON + 26);
+    // 8. Patrolling Watchers with Sweeping Searchlight Cones & Health Pips
+    for (const f of world.foes) {
+      if (!f.alive) continue;
+      const sx = (f.x - camX) | 0;
+      const sy = f.y | 0;
+      if (sx < -40 || sx > FB_WIDTH + 40) continue;
+
+      // Sweeping searchlight gaze cone
+      const reach = sx + f.dir * 100;
+      this.drawLine(sx, sy + 10, reach, sy - 6, B_AMBER + 16);
+      this.drawLine(sx, sy + 10, reach, sy + 30, B_AMBER + 16);
+
+      // Shaded Watcher cloak + glowing eyes + HP pips
+      const cloak = f.hurtTimer > 0 ? (B_IVORY + 30) : (B_ASTRAL + 18);
+      this.fillTri({ x: sx, y: sy - 18 }, { x: sx - 14, y: sy + 32 }, { x: sx, y: sy + 32 }, cloak);
+      this.fillTri({ x: sx, y: sy - 18 }, { x: sx, y: sy + 32 }, { x: sx + 14, y: sy + 32 }, B_ASTRAL + 9);
+      this.fillCircle(sx + f.dir * 4, sy - 10, 2, B_CRIMSON + 30);
+      for (let h = 0; h < f.hp; h++) {
+        this.fillRect(sx - 6 + h * 7, sy - 26, sx - 2 + h * 7, sy - 23, B_CRIMSON + 28);
+      }
     }
 
+    // 9. Manor Gate Threshold (x = 1820)
     const gateSx = 1820 - camX;
     if (gateSx >= -40 && gateSx <= FB_WIDTH + 40) {
-      const col = state.canopy.solved ? (B_PINE + 26) : (B_CRIMSON + 24);
-      this.fillRect(gateSx - 20, 126, gateSx - 14, 217, B_IVORY + 18);
-      this.fillRect(gateSx + 14, 126, gateSx + 20, 217, B_IVORY + 18);
+      const col = extra.canopy.solved ? (B_PINE + 26) : (B_CRIMSON + 24);
+      this.fillShadedRect(gateSx - 20, 126, gateSx - 14, 217, B_IVORY, 24, 12);
+      this.fillShadedRect(gateSx + 14, 126, gateSx + 20, 217, B_IVORY, 24, 12);
       this.drawRectOutline(gateSx - 14, 134, gateSx + 14, 217, col);
     }
 
-    // 10. Evelyn Roivas in Crimson Raincoat & Golden Oil Lantern (or Danmaku Overlay)
-    if (state.arena.active) {
-      this.renderBulletHellOverlay(state.arena, tick);
+    // 10. Evelyn Roivas + Gladius Slash Arc (or Danmaku Boss Arena)
+    if (extra.arena.active) {
+      this.renderBulletHellOverlay(extra.arena, tick);
     } else {
-      this.drawInvestigator(pxScreen, pyScreen, state.facing, state.moving, tick);
+      this.drawInvestigator(pxScreen, pyScreen, p, tick);
     }
   }
 
@@ -305,18 +293,30 @@ export class TownshipFramebuffer {
     this.drawCircleOutline(arena.soulX | 0, arena.soulY | 0, 20, arena.slowMo ? (B_AMBER + 28) : (B_SEA + 24), 16);
   }
 
-  drawInvestigator(cx, topY, facing, moving, tick) {
-    const stride = moving ? (((q16Sin((tick * 11000) % Q16_TAU) * 4) >> 16) * facing) : 0;
-    // Crimson pointed hood & raincoat
-    this.fillTri({ x: cx, y: topY }, { x: cx - 8, y: topY + 12 }, { x: cx + 8, y: topY + 12 }, B_CRIMSON + 24);
-    this.fillTri({ x: cx, y: topY + 8 }, { x: cx - 10, y: topY + 25 }, { x: cx + 10, y: topY + 25 }, B_CRIMSON + 22);
+  drawInvestigator(cx, topY, p, tick) {
+    const stride = !p.grounded ? 3 : p.moving ? (((q16Sin((tick * 11000) % Q16_TAU) * 4) >> 16) * p.facing) : 0;
+    const coatHi = p.hidden ? (B_SKY + 8) : (B_CRIMSON + 26);
+    const coatLo = p.hidden ? (B_SKY + 5) : (B_CRIMSON + 15);
+    // Shaded pointed hood & raincoat
+    this.fillTri({ x: cx, y: topY }, { x: cx - 8, y: topY + 12 }, { x: cx, y: topY + 12 }, coatHi);
+    this.fillTri({ x: cx, y: topY }, { x: cx, y: topY + 12 }, { x: cx + 8, y: topY + 12 }, coatLo);
+    this.fillTri({ x: cx, y: topY + 8 }, { x: cx - 10, y: topY + 25 }, { x: cx, y: topY + 25 }, coatHi);
+    this.fillTri({ x: cx, y: topY + 8 }, { x: cx, y: topY + 25 }, { x: cx + 10, y: topY + 25 }, coatLo);
+
     this.drawLine(cx - 3, topY + 25, cx - 3 - stride, topY + 32, B_IVORY + 26);
     this.drawLine(cx + 3, topY + 25, cx + 3 + stride, topY + 32, B_IVORY + 26);
-    // Glowing golden oil lantern
-    const handX = cx + facing * 11;
+
+    const handX = cx + p.facing * 11;
     const handY = topY + 16;
-    this.drawLine(cx + facing * 4, topY + 14, handX, handY, B_IVORY + 24);
-    this.fillCircle(handX, handY + 2, 3, B_AMBER + 31);
+    this.drawLine(cx + p.facing * 4, topY + 14, handX, handY, B_IVORY + 24);
+    if (!p.hidden) this.fillCircle(handX, handY + 2, 3, B_AMBER + 31);
+
+    // Visible Bronze Gladius Slash Arc!
+    if (p.slashTimer > 0) {
+      const tipX = cx + p.facing * 36;
+      this.drawLine(cx + p.facing * 8, topY + 6, tipX, topY + 16, B_AMBER + 31);
+      this.drawLine(cx + p.facing * 8, topY + 24, tipX, topY + 16, B_IVORY + 30);
+    }
   }
 
   fillRect(x0, y0, x1, y1, c) {
@@ -342,19 +342,19 @@ export class TownshipFramebuffer {
   fillTri(a, b, c, col) {
     const minX = q16Clamp(Math.min(a.x, b.x, c.x), 0, FB_WIDTH - 1);
     const maxX = q16Clamp(Math.max(a.x, b.x, c.x), 0, FB_WIDTH - 1);
-    const minY = q16Clamp(Math.min(a.y, b.y, c.y), 0, FB_HEIGHT - 1);
-    const maxY = q16Clamp(Math.max(a.y, b.y, c.y), 0, FB_HEIGHT - 1);
-    const area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-    if (area === 0) return;
-    for (let y = minY; y <= maxY; y++) {
-      const row = y * FB_WIDTH;
-      for (let x = minX; x <= maxX; x++) {
-        const w0 = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
-        const w1 = (c.x - b.x) * (y - b.y) - (c.y - b.y) * (x - b.x);
-        const w2 = (a.x - c.x) * (y - c.y) - (a.y - c.y) * (x - c.x);
-        if ((area > 0 && w0 >= 0 && w1 >= 0 && w2 >= 0) || (area < 0 && w0 <= 0 && w1 <= 0 && w2 <= 0)) {
-          this.indices[row + x] = col;
-        }
+const minY = q16Clamp(Math.min(a.y, b.y, c.y), 0, FB_HEIGHT - 1);
+const maxY = q16Clamp(Math.max(a.y, b.y, c.y), 0, FB_HEIGHT - 1);
+const area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+if (area === 0) return;
+for (let y = minY; y <= maxY; y++) {
+const row = y * FB_WIDTH;
+for (let x = minX; x <= maxX; x++) {
+const w0 = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+const w1 = (c.x - b.x) * (y - b.y) - (c.y - b.y) * (x - b.x);
+const w2 = (a.x - c.x) * (y - c.y) - (a.y - c.y) * (x - c.x);
+if ((area > 0 && w0 >= 0 && w1 >= 0 && w2 >= 0) || (area < 0 && w0 <= 0 && w1 <= 0 && w2 <= 0)) {
+this.indices[row + x] = col;
+}
 }
 }
 }
