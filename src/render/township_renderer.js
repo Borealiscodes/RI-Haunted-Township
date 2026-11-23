@@ -41,6 +41,18 @@ export class TownshipFramebuffer {
     this.drawLine(x0, y0 + 1, x1, y1 + 1, Math.max(1, baseCol - 6));
   }
 
+  /** Draw a LittleBigPlanet-style dashed thread seam line */
+  drawStitchedLine(x0, y0, x1, y1, c) {
+    const steps = Math.max(1, (Math.hypot(x1 - x0, y1 - y0) / 6) | 0);
+    for (let i = 0; i < steps; i += 2) {
+      const ax = (x0 + ((x1 - x0) * i) / steps) | 0;
+      const ay = (y0 + ((y1 - y0) * i) / steps) | 0;
+      const bx = (x0 + ((x1 - x0) * (i + 1)) / steps) | 0;
+      const by = (y0 + ((y1 - y0) * (i + 1)) / steps) | 0;
+      this.drawLine(ax, ay, bx, by, c);
+    }
+  }
+
   renderWorld(state, tick) {
     const camX = state.cameraX | 0;
     const bank = (state.activeAlign & 3) << 6;
@@ -49,7 +61,7 @@ export class TownshipFramebuffer {
     const lanternR = state.hasTuningFork ? 155 : 112;
     const lanternRSq = lanternR * lanternR;
 
-    // 1. Base Sky + Radial Fluid Fog + Lantern Beam
+    // 1. LittleBigPlanet Cross-Stitched Burlap Sky + Cobblestone Ground + Lantern Cone
     for (let y = 0; y < FB_HEIGHT; y++) {
       const row = y * FB_WIDTH;
       const bRow = (y & 3) << 2;
@@ -58,119 +70,121 @@ export class TownshipFramebuffer {
       const isGround = y >= 218;
 
       for (let x = 0; x < FB_WIDTH; x++) {
+        const wx = x + camX;
         const dx = x - pxScreen;
         const d2 = dx * dx + dy2;
         const fog = state.fluidFog.sampleFog(x, y);
-        let light = isGround ? 9 : (3 + (fog >> 1));
+        // Tactile burlap cross-weave in sky, cobblestone brick mortar on ground
+        const burlapWeave = (((wx & 3) === 0 || (y & 3) === 0) ? 2 : 0);
+        const cobble = isGround && (((y & 7) === 0) || (((wx + ((y >> 3) * 6)) & 15) === 0)) ? -3 : 0;
+        let light = isGround ? (11 + cobble) : (4 + burlapWeave + (fog >> 1));
+
         if (d2 < lanternRSq) {
           const beam = 26 - (((d2 * 21) / lanternRSq) | 0);
-          light = q16Clamp(beam + (isGround ? 6 : 0), 4, 36);
+          light = q16Clamp(beam + (isGround ? 6 + cobble : 0), 4, 36);
         }
         const dither = BAYER_4X4[bRow + (x & 3)] >> 2;
-        this.indices[row + x] = bank + q16Clamp(light + dither, 2, 40);
+        this.indices[row + x] = bank + q16Clamp(light + dither, 2, 42);
       }
     }
 
-    // 2. Eldritch Warped Van Gogh Impasto Flow Field (Non-Euclidean hyperbolic curl)
-    for (let sy = 14; sy < 134; sy += 14) {
-      for (let sx = -16; sx < FB_WIDTH + 16; sx += 24) {
+    // 2. Eldritch Warped Van Gogh Impasto Swirls + Cardboard Cutout Clouds with Stitching
+    for (let sy = 16; sy < 118; sy += 18) {
+      for (let sx = -16; sx < FB_WIDTH + 16; sx += 30) {
         const wx = sx + (camX >> 1);
-        const warp = q16Sin(((wx * 1100) - (sy * 1700) + (tick * 1300)) % Q16_TAU);
-        const angle = ((warp * 48000) >> 16) + ((sy * 900) & 65535);
-        const dx = (12 * q16Cos(angle)) >> 16;
-        const dy = (12 * q16Sin(angle)) >> 16;
-        const tone = bank + 18 + (((wx >> 4) ^ (sy >> 3)) & 15);
-        this.drawImpastoStroke(sx - dx, sy - dy, sx + dx, sy + dy, tone);
+        const warp = q16Sin(((wx * 1100) - (sy * 1700) + (tick * 1100)) % Q16_TAU);
+        const angle = ((warp * 42000) >> 16);
+        const dx = (11 * q16Cos(angle)) >> 16;
+        const dy = (11 * q16Sin(angle)) >> 16;
+        this.drawImpastoStroke(sx - dx, sy - dy, sx + dx, sy + dy, bank + 20);
       }
     }
 
-    // 3. Eldritch Eclipse Vortex & Watching Eye-Halos in the Sky
-    const moonX = 365 - ((camX >> 3) % 110);
+    // LBP Cardboard Cutout Clouds with Stitched Borders
+    for (const cl of Array.of({ x: 110, y: 42 }, { x: 290, y: 34 }, { x: 450, y: 52 })) {
+      const cx = ((cl.x - (camX >> 2)) + 520) % 520 - 20;
+      this.fillRect(cx - 24, cl.y - 7, cx + 24, cl.y + 7, bank + 16);
+      this.fillRect(cx - 14, cl.y - 13, cx + 14, cl.y + 7, bank + 20);
+      this.drawStitchedLine(cx - 24, cl.y + 7, cx + 24, cl.y + 7, bank + 44);
+      this.drawStitchedLine(cx - 24, cl.y - 7, cx + 24, cl.y - 7, bank + 44);
+    }
+
+    // 3. Eldritch Slit-Pupil Eclipse Moon
+    const moonX = 390 - ((camX >> 3) % 90);
     const moonY = 44;
-    this.drawCircleOutline(moonX, moonY, 14, bank + 63, 18);
-    this.drawLine(moonX, moonY - 11, moonX, moonY + 11, bank + 63); // Vertical slit pupil
-    for (let ring = 1; ring <= 3; ring++) {
-      const rad = 19 + ring * 11;
-      for (let s = 0; s < 8; s++) {
-        const dir = (ring & 1) ? 1 : -1; // Counter-rotating eldritch vortex rings
-        const a0 = (((tick * 1300 * dir) + s * 51472 + ring * 14000) % Q16_TAU + Q16_TAU) % Q16_TAU;
-        const a1 = (a0 + 26000) % Q16_TAU;
-        this.drawImpastoStroke(
-          moonX + ((rad * q16Cos(a0)) >> 16), moonY + (((rad >> 1) * q16Sin(a0)) >> 16),
-          moonX + ((rad * q16Cos(a1)) >> 16), moonY + (((rad >> 1) * q16Sin(a1)) >> 16),
-          bank + 34 + ring * 6
-        );
+    this.drawCircleOutline(moonX, moonY, 13, bank + 63, 18);
+    this.drawLine(moonX, moonY - 10, moonX, moonY + 10, bank + 63);
+    // 4. Blackwater Lighthouse with Sweeping Volumetric Beam (x = 90)
+    const lhSx = 90 - camX;
+    if (lhSx > -160 && lhSx < FB_WIDTH + 160) {
+      // Tapered stone lighthouse tower + lantern room
+      this.drawLine(lhSx - 14, 218, lhSx - 8, 96, bank + 46);
+      this.drawLine(lhSx + 14, 218, lhSx + 8, 96, bank + 46);
+      this.drawStitchedLine(lhSx - 11, 156, lhSx + 11, 156, bank + 54);
+      this.drawRectOutline(lhSx - 9, 82, lhSx + 9, 96, bank + 62);
+      this.drawLine(lhSx - 11, 82, lhSx, 68, bank + 60);
+      this.drawLine(lhSx + 11, 82, lhSx, 68, bank + 60);
+      // Sweeping searchlight beam
+      const sweep = ((q16Sin((tick * 1600) % Q16_TAU) * 140) >> 16);
+      this.drawLine(lhSx, 89, lhSx + sweep, 46, bank + 42);
+      this.drawLine(lhSx, 89, lhSx + sweep, 78, bank + 42);
+    }
+
+    // 5. Harbor Schooner Mast & Rigging (x = 260)
+    const shipSx = 260 - camX;
+    if (shipSx > -80 && shipSx < FB_WIDTH + 80) {
+      this.drawLine(shipSx, 218, shipSx, 92, bank + 38);
+      this.drawLine(shipSx - 26, 126, shipSx + 26, 126, bank + 38);
+      this.drawStitchedLine(shipSx, 92, shipSx - 34, 204, bank + 32);
+      this.drawStitchedLine(shipSx, 92, shipSx + 34, 204, bank + 32);
+    }
+
+    // 6. Rhode Island Clapboard Gambrel Houses (Paned Windows & Brick Chimneys)
+    for (const hx of Array.of(480, 660, 880, 1360, 1640)) {
+      const sx = hx - camX;
+      if (sx < -60 || sx > FB_WIDTH + 60) continue;
+      // Clapboard siding planks
+      this.fillRect(sx - 32, 144, sx + 32, 218, bank + 14);
+      for (let py = 152; py < 218; py += 8) this.drawLine(sx - 32, py, sx + 32, py, bank + 22);
+      this.drawRectOutline(sx - 32, 144, sx + 32, 218, bank + 42);
+      // Gambrel New England roof + brick chimney
+      this.drawLine(sx - 36, 144, sx - 20, 118, bank + 48);
+      this.drawLine(sx - 20, 118, sx + 20, 118, bank + 48);
+      this.drawLine(sx + 20, 118, sx + 36, 144, bank + 48);
+      this.drawRectOutline(sx + 14, 102, sx + 22, 118, bank + 44);
+      // Lit 4-pane colonial windows
+      for (const wx of Array.of(sx - 16, sx + 16)) {
+        this.drawRectOutline(wx - 6, 160, wx + 6, 176, bank + 60);
+        this.drawLine(wx, 160, wx, 176, bank + 46);
+        this.drawLine(wx - 6, 168, wx + 6, 168, bank + 46);
       }
     }
 
-    for (const st of Array.of({ x: 75, y: 34 }, { x: 195, y: 58 }, { x: 280, y: 28 }, { x: 435, y: 66 })) {
-      const sx = ((st.x - (camX >> 2)) + 480) % 480;
-      const pulse = (tick >> 3) & 3;
-      this.drawLine(sx - 5, st.y, sx, st.y - 3, bank + 63);
-      this.drawLine(sx, st.y - 3, sx + 5, st.y, bank + 63);
-      this.drawLine(sx - 5, st.y, sx, st.y + 3, bank + 63);
-      this.drawLine(sx, st.y + 3, sx + 5, st.y, bank + 63);
-      this.drawLine(sx, st.y - 2, sx, st.y + 2, bank + 63);
-      this.drawCircleOutline(sx, st.y, 8 + pulse, bank + 40, 14);
-    }
-    // 4. Warped Coastal Hills & Tentacle-Cypress Silhouettes
-    let prevHillY = 148;
-    for (let sx = 0; sx <= FB_WIDTH; sx += 16) {
-      const wx = sx + (camX >> 1);
-      const hy = 148 + ((q16Sin((wx * 900) % Q16_TAU) * 18) >> 16) + ((q16Cos((wx * 2100) % Q16_TAU) * 9) >> 16);
-      if (sx > 0) this.drawImpastoStroke(sx - 16, prevHillY, sx, hy, bank + 26);
-      prevHillY = hy;
-    }
-
-    for (let tx = 80; tx < 1880; tx += 150) {
-      const sx = tx - camX;
-      if (sx < -40 || sx > FB_WIDTH + 40) continue;
-      for (let h = 0; h < 68; h += 6) {
-        const whip = ((q16Sin(((tick * 2 + h * 7) * 2200) % Q16_TAU) * (2 + (h >> 4))) >> 16);
-        const w = Math.max(1, ((68 - h) * h) >> 8);
-        this.drawImpastoStroke(sx - w + whip, 218 - h, sx + w + whip, 213 - h, bank + 22);
-      }
-    }
-
-    // 5. Cobblestone Road, Surf Waves, Streetlamps, Bell-Tower & Old Mill Wheel
-    this.drawImpastoStroke(0, 218, FB_WIDTH - 1, 218, bank + 38);
-    for (let wx = 0; wx < FB_WIDTH; wx += 14) {
-      const waveY = 236 + ((q16Sin(((wx + camX + tick * 2) * 2400) % Q16_TAU) * 3) >> 16);
-      this.drawImpastoStroke(wx, waveY, wx + 9, waveY, bank + 32);
-    }
-
-    for (let lx = 140; lx < 1800; lx += 220) {
-      const sx = lx - camX;
-      if (sx < -25 || sx > FB_WIDTH + 25) continue;
-      this.drawLine(sx, 146, sx, 218, bank + 32);
-      this.drawRectOutline(sx - 4, 136, sx + 4, 146, bank + 60);
-      this.drawCircleOutline(sx, 141, 8 + ((tick >> 3) & 1), bank + 46, 10);
-    }
-
+    // 7. Bell-Tower Spire (1110m) & Turning Old Mill Waterwheel (1540m)
     const towerSx = 1110 - camX;
     if (towerSx > -140 && towerSx < FB_WIDTH + 140) {
-      this.drawRectOutline(towerSx - 105, 76, towerSx + 105, 86, bank + 40);
-      this.drawImpastoStroke(towerSx - 105, 76, towerSx, 34, bank + 46);
-      this.drawImpastoStroke(towerSx + 105, 76, towerSx, 34, bank + 46);
+      this.drawRectOutline(towerSx - 105, 76, towerSx + 105, 86, bank + 44);
+      this.drawImpastoStroke(towerSx - 105, 76, towerSx, 24, bank + 52);
+      this.drawImpastoStroke(towerSx + 105, 76, towerSx, 24, bank + 52);
     }
 
     const wheelSx = 1540 - camX;
     if (wheelSx > -60 && wheelSx < FB_WIDTH + 60) {
-      this.drawCircleOutline(wheelSx, 184, 28, bank + 42, 16);
+      this.drawCircleOutline(wheelSx, 184, 28, bank + 46, 16);
       for (let sp = 0; sp < 4; sp++) {
         const a = (((tick * 1200) + sp * 102944) % Q16_TAU);
         const dx = (28 * q16Cos(a)) >> 16, dy = (28 * q16Sin(a)) >> 16;
-        this.drawLine(wheelSx - dx, 184 - dy, wheelSx + dx, 184 + dy, bank + 38);
+        this.drawLine(wheelSx - dx, 184 - dy, wheelSx + dx, 184 + dy, bank + 40);
       }
     }
 
-    // 6. Verlet Cloth Canopy Ribbons & Pentatonic Wind Chimes
+    // 8. Stitched Verlet Cloth Ribbons & Pentatonic Chimes
     for (const rib of state.canopy.ribbons) {
       for (let i = 1; i < rib.pts.length; i++) {
         const a = rib.pts.at(i - 1), b = rib.pts.at(i);
         const ax = (a.x - camX) | 0, bx = (b.x - camX) | 0;
         if (ax >= -20 && ax <= FB_WIDTH + 20) {
-          this.drawImpastoStroke(ax, a.y | 0, bx, b.y | 0, bank + 50);
+          this.drawImpastoStroke(ax, a.y | 0, bx, b.y | 0, bank + 52);
         }
       }
     }
@@ -184,14 +198,13 @@ export class TownshipFramebuffer {
       this.drawRectOutline(sx + sway - 3, 134, sx + sway + 3, 148, col);
     }
 
-    // 7. Faction Guild Outposts, Amber Nodes, Foes & Manor Gate
+    // 9. Faction Guild Outposts, Amber Nodes, Foes & Manor Gate
     for (const fac of Object.values(FACTIONS)) {
       const sx = fac.x - camX;
       if (sx < -30 || sx > FB_WIDTH + 30) continue;
-      this.drawRectOutline(sx - 12, 174, sx + 12, 218, bank + 54);
-      this.drawImpastoStroke(sx - 15, 174, sx, 160, bank + 60);
-      this.drawImpastoStroke(sx + 15, 174, sx, 160, bank + 60);
-      this.drawCircleOutline(sx, 186, 4, bank + 62, 10);
+      this.drawRectOutline(sx - 12, 174, sx + 12, 218, bank + 56);
+      this.drawStitchedLine(sx - 12, 178, sx + 12, 178, bank + 62);
+      this.drawCircleOutline(sx, 188, 4, bank + 62, 10);
     }
 
     for (const node of state.nodes) {
@@ -236,14 +249,20 @@ export class TownshipFramebuffer {
     }
     this.drawRectOutline(106, 56, 374, 236, bBank + 60);
 
+    // Boss HP & Focus Energy bars inside Danmaku frame
+    const hpW = ((240 * arena.bossHp) / arena.maxHp) | 0;
+    this.fillRect(120, 60, 120 + hpW, 64, bBank + 62);
+    const focW = ((240 * arena.focusEnergy) / 100) | 0;
+    this.fillRect(120, 228, 120 + focW, 232, arena.slowMo ? 126 : 96);
+
     const r = 20;
     const rot = (tick * 2200) % Q16_TAU;
     for (let i = 0; i < 4; i++) {
       const a = rot + i * 102944;
       const rx = 240 + ((r * q16Cos(a)) >> 16);
       const ry = 88 + ((8 * q16Sin(a)) >> 16);
-      this.drawLine(240, 64, rx, ry, bBank + 63);
-      this.drawLine(240, 112, rx, ry, bBank + 54);
+      this.drawLine(240, 68, rx, ry, bBank + 63);
+      this.drawLine(240, 108, rx, ry, bBank + 54);
     }
 
     for (const b of arena.bullets) {
@@ -251,7 +270,7 @@ export class TownshipFramebuffer {
     }
 
     this.drawCircleOutline(arena.soulX | 0, arena.soulY | 0, 5, 126, 12);
-    this.drawCircleOutline(arena.soulX | 0, arena.soulY | 0, 18, 92, 16);
+    this.drawCircleOutline(arena.soulX | 0, arena.soulY | 0, 20, arena.slowMo ? 126 : 92, 16);
   }
 
   drawInvestigator(cx, topY, facing, moving, bank, tick) {
@@ -265,6 +284,13 @@ export class TownshipFramebuffer {
     this.drawLine(cx - 3, topY + 25, cx - 3 - stride, topY + 32, bank + 63);
     this.drawLine(cx + 3, topY + 25, cx + 3 + stride, topY + 32, bank + 63);
     this.drawCircleOutline(cx + facing * 11, topY + 17, 4, bank + 63, 10);
+  }
+
+  fillRect(x0, y0, x1, y1, c) {
+    for (let y = Math.max(0, y0); y <= Math.min(FB_HEIGHT - 1, y1); y++) {
+      const row = y * FB_WIDTH;
+      for (let x = Math.max(0, x0); x <= Math.min(FB_WIDTH - 1, x1); x++) this.indices[row + x] = c;
+    }
   }
 
   drawRectOutline(x0, y0, x1, y1, c) {

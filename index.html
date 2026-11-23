@@ -39,13 +39,14 @@
     <button id="chime-btn" class="accent">🔔 Ring Chime</button>
     <button id="gate-btn" class="accent">🚪 Manor Gate</button>
     <button id="narrate-btn">🎙️ Narrate</button>
-    <button id="audio-btn">🎻 OST</button>
+    <button id="audio-btn">🎻 3-Track OST</button>
   </div>
   <div id="arena-controls" class="controls" style="display:none;">
     <button id="a-left">◀</button>
     <button id="a-up">▲</button>
     <button id="a-down">▼</button>
     <button id="a-right">▶</button>
+    <button id="slowmo-btn" class="accent">⏳ Bullet-Time</button>
     <button id="parry-btn" class="danger">⚔️ Gladius Parry</button>
   </div>
   <div id="hud">Initializing Township...</div>
@@ -98,7 +99,7 @@
       canopy, fluidFog, arena, nodes, foes
     };
 
-    let moveX = 0, moveY = 0, tick = 0;
+    let moveX = 0, moveY = 0, tick = 0, draggingSoul = false;
 
     function unlockAudio() {
       sound.start();
@@ -119,19 +120,35 @@
     }
     document.getElementById('narrate-btn').addEventListener('click', () => { unlockAudio(); narrate(chronicle.entries.at(-1)); });
     document.getElementById('mode-select').addEventListener('change', (e) => { eco.setMode(e.target.value); logBar.textContent = 'Mode: ' + eco.mode; });
+
+    // Direct touch/pointer steering inside Danmaku Arena
+    canvas.addEventListener('pointerdown', (e) => {
+      unlockAudio();
+      if (!arena.active) return;
+      draggingSoul = true;
+      const r = canvas.getBoundingClientRect();
+      arena.setSoulTarget(((e.clientX - r.left) / r.width) * FB_WIDTH, ((e.clientY - r.top) / r.height) * FB_HEIGHT);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!arena.active || !draggingSoul) return;
+      const r = canvas.getBoundingClientRect();
+      arena.setSoulTarget(((e.clientX - r.left) / r.width) * FB_WIDTH, ((e.clientY - r.top) / r.height) * FB_HEIGHT);
+    });
+
     const bindHold = (id, dx, dy) => {
       document.getElementById(id).addEventListener('pointerdown', () => { moveX = dx; moveY = dy; unlockAudio(); });
     };
     bindHold('left-btn', -1, 0); bindHold('right-btn', 1, 0);
     bindHold('a-left', -1, 0); bindHold('a-right', 1, 0);
     bindHold('a-up', 0, -1); bindHold('a-down', 0, 1);
-    window.addEventListener('pointerup', () => { moveX = 0; moveY = 0; });
+    window.addEventListener('pointerup', () => { moveX = 0; moveY = 0; draggingSoul = false; });
 
     window.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowLeft' || e.key === 'a') moveX = -1;
       if (e.key === 'ArrowRight' || e.key === 'd') moveX = 1;
       if (e.key === 'ArrowUp' || e.key === 'w') moveY = -1;
       if (e.key === 'ArrowDown' || e.key === 's') moveY = 1;
+      if (e.key === 'Shift' && arena.active) arena.toggleBulletTime();
     });
     window.addEventListener('keyup', (e) => {
       if (['ArrowLeft','a','ArrowRight','d'].includes(e.key)) moveX = 0;
@@ -188,6 +205,12 @@
       }
     });
 
+    document.getElementById('slowmo-btn').addEventListener('click', () => {
+      unlockAudio();
+      const on = arena.toggleBulletTime();
+      logBar.textContent = on ? 'BULLET-TIME FOCUS ACTIVE (0.42x projectile speed)' : 'Bullet-Time Focus released.';
+    });
+
     document.getElementById('parry-btn').addEventListener('click', () => {
       unlockAudio();
       const res = arena.parryBurst();
@@ -198,7 +221,7 @@
       } else if (res.event === 'HIT') {
         sound.playChime(440.0, true); logBar.textContent = 'Parried bolt! (' + res.hp + ' HP left)';
       } else {
-        logBar.textContent = 'Graze 8+ bullets or parry close to projectiles!';
+        logBar.textContent = 'Graze 6+ bullets or parry close to projectiles!';
       }
     });
 
@@ -220,7 +243,7 @@
             if (f.alive && Math.abs(state.playerX - f.x) < 28) {
               f.alive = false; state.activeAlign = f.align;
               arena.startEncounter(f.name, f.align, eco.items.has('BRONZE_GLADIUS') ? 2 : 3);
-              logBar.textContent = 'AMBUSH! ' + f.name + ' triggers Danmaku! Tap [⚔️ Gladius Parry]!';
+              logBar.textContent = 'AMBUSH! ' + f.name + ' triggers Danmaku! Drag on screen to weave, use [⏳ Bullet-Time], and tap [⚔️ Gladius Parry]!';
               break;
             }
           }
@@ -231,24 +254,28 @@
       const newLore = chronicle.recordDistrict(zoneKey);
       if (newLore) logBar.textContent = newLore;
 
+      // Adaptive 3-Track OST Switching
+      const trackKey = arena.active ? 'DANMAKU' : (zoneKey === 'CANOPY' || zoneKey === 'MILL') ? 'CANOPY' : 'HARBOR';
+      const trackName = sound.setTrack(trackKey);
+
       canopy.step(tick, state.playerX, state.playerY);
       fluidFog.step(state.playerX, state.playerY, state.cameraX, tick);
       sheaf.stepLocalNeighborhood(state.playerX);
-      sound.updateTension(state.sanityQ16, arena.active);
+      sound.updateTension(state.sanityQ16, arena.active, arena.slowMo);
 
       fb.renderWorld(state, tick);
       imgU32.set(fb.resolveRGBA32());
       ctx.putImageData(imgData, 0, 0);
 
-      const zoneNames = { HARBOR: 'Foggy Harbor', SQUARE: 'Town Square', CANOPY: 'Bell-Tower Canopy', MILL: 'Old Mill & Manor Gate' };
-      const relics = Array.from(eco.items).join(', ') || 'None';
-      hud.textContent =
-        'District: ' + zoneNames[zoneKey] + ' (' + state.playerX + 'm / 1920m) | Mode: ' + eco.mode + ' | Sanity: ' + ((state.sanityQ16 * 100) >> 16) + '%\n' +
-        'Attaché Case: ' + eco.amberShards + ' Amber Shards | Relics: ' + relics + (arena.active ? ' | Graze: ' + arena.grazeCount : '');
-      chronicleList.innerHTML = chronicle.entries.map((e) => '<p style="margin-bottom:4px;">• ' + e + '</p>').join('');
-      requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
-  </script>
-</body>
-</html>
+const zoneNames = { HARBOR: 'Foggy Harbor', SQUARE: 'Town Square', CANOPY: 'Bell-Tower Canopy', MILL: 'Old Mill & Manor Gate' };
+const relics = Array.from(eco.items).join(', ') || 'None';
+hud.textContent =
+'District: ' + zoneNames[zoneKey] + ' (' + state.playerX + 'm) | OST: ' + trackName + ' | Sanity: ' + ((state.sanityQ16 * 100) >> 16) + '%\n' +
+'Attaché Case: ' + eco.amberShards + ' Amber Shards | Relics: ' + relics + (arena.active ? ' | Graze: ' + arena.grazeCount + ' | Focus: ' + (arena.focusEnergy | 0) + '%' : '');
+chronicleList.innerHTML = chronicle.entries.map((e) => '• ' + e + '').join('');
+requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+
+

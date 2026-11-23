@@ -26,7 +26,7 @@ assert.equal(trade.ok, true);
 // 4. Verify Bullet-Hell Danmaku arena
 const arena = new BulletHellArena();
 arena.startEncounter('Harbor Zealot', ALIGN.CHATTURGHA, 1);
-arena.step(14);
+arena.step(12);
 assert.ok(arena.bullets.length > 0);
 
 console.log('✓ RI-Haunted-Township Open-World Suite Verified:', {
