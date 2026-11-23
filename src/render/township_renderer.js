@@ -48,7 +48,6 @@ export class TownshipFramebuffer {
     this.rgba32 = new Uint32Array(FB_WIDTH * FB_HEIGHT);
   }
 
-  /** Fill horizontal gradient rectangle for 2.5D cylindrical/architectural shading */
   fillShadedRect(x0, y0, x1, y1, bank, shadeLeft, shadeRight) {
     const w = Math.max(1, x1 - x0);
     for (let y = Math.max(0, y0); y <= Math.min(FB_HEIGHT - 1, y1); y++) {
@@ -58,6 +57,34 @@ export class TownshipFramebuffer {
         const s = shadeLeft + (((shadeRight - shadeLeft) * (x - x0)) / w | 0);
         const dither = BAYER_4X4[bRow + (x & 3)] >> 3;
         this.indices[row + x] = bank + q16Clamp(s + dither, 1, 31);
+      }
+    }
+  }
+
+  /** Additive volumetric light cone with Bayer-dithered radial falloff */
+  fillLightCone(apexX, apexY, endX, endYTop, endYBot, bank, intensity = 16) {
+    const minX = q16Clamp(Math.min(apexX, endX), 0, FB_WIDTH - 1);
+    const maxX = q16Clamp(Math.max(apexX, endX), 0, FB_WIDTH - 1);
+    const minY = q16Clamp(Math.min(apexY, endYTop, endYBot), 0, FB_HEIGHT - 1);
+    const maxY = q16Clamp(Math.max(apexY, endYTop, endYBot), 0, FB_HEIGHT - 1);
+    const spanX = Math.max(1, Math.abs(endX - apexX));
+    const a = { x: apexX, y: apexY }, b = { x: endX, y: endYTop }, c = { x: endX, y: endYBot };
+    const area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    if (area === 0) return;
+
+    for (let y = minY; y <= maxY; y++) {
+      const row = y * FB_WIDTH;
+      const bRow = (y & 3) << 2;
+      for (let x = minX; x <= maxX; x++) {
+        const w0 = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+        const w1 = (c.x - b.x) * (y - b.y) - (c.y - b.y) * (x - b.x);
+        const w2 = (a.x - c.x) * (y - c.y) - (a.y - c.y) * (x - c.x);
+        if ((area > 0 && w0 >= 0 && w1 >= 0 && w2 >= 0) || (area < 0 && w0 <= 0 && w1 <= 0 && w2 <= 0)) {
+          const distRatio = Math.min(1, Math.abs(x - apexX) / spanX);
+          const dither = BAYER_4X4[bRow + (x & 3)] >> 2;
+          const glow = q16Clamp(((intensity * (1 - distRatio * 0.72)) | 0) + dither, 4, 29);
+          this.indices[row + x] = bank + glow;
+        }
       }
     }
   }
@@ -104,13 +131,12 @@ export class TownshipFramebuffer {
       }
     }
 
-    // 2. Swirling Crescent Moon & Star Halos
+    // 2. Swirling Crescent Moon & Coastal Hills + Evergreen Pines
     const moonX = 385 - ((camX >> 3) % 90);
     const moonY = 42;
     this.fillCircle(moonX, moonY, 12, B_AMBER + 28);
     this.fillCircle(moonX + 5, moonY - 3, 10, B_SKY + 9);
 
-    // 3. Shaded Evergreen Pines (Lit Left Facet + Shadowed Right Facet + Ground Shadow)
     for (let sx = 0; sx < FB_WIDTH; sx += 4) {
       const wx = sx + (camX >> 1);
       const hy = 158 + ((q16Sin((wx * 850) % Q16_TAU) * 16) >> 16);
@@ -120,19 +146,25 @@ export class TownshipFramebuffer {
     for (let tx = 65; tx < 1890; tx += 135) {
       const sx = tx - camX;
       if (sx < -35 || sx > FB_WIDTH + 35) continue;
-      this.fillRect(sx - 20, 217, sx + 22, 220, B_WOOD + 3); // Ground drop shadow
+      this.fillRect(sx - 20, 217, sx + 22, 220, B_WOOD + 3);
       this.fillShadedRect(sx - 3, 198, sx + 3, 217, B_WOOD, 14, 6);
       for (let tier = 0; tier < 3; tier++) {
         const ty = 146 + tier * 16;
         const w = 16 + tier * 4;
-        // Split each pine tier into sunlit left triangle & shadowed right triangle
         this.fillTri({ x: sx, y: ty }, { x: sx - w, y: ty + 28 }, { x: sx, y: ty + 28 }, B_PINE + 20);
         this.fillTri({ x: sx, y: ty }, { x: sx, y: ty + 28 }, { x: sx + w, y: ty + 28 }, B_PINE + 10);
       }
     }
-    // 4. Cylindrically Shaded Blackwater Lighthouse (x = 95)
+    // 3. Blackwater Lighthouse + Sweeping Volumetric Beacon Frustum (x = 95)
     const lhSx = 95 - camX;
-    if (lhSx > -180 && lhSx < FB_WIDTH + 180) {
+    if (lhSx > -220 && lhSx < FB_WIDTH + 220) {
+      // Smooth 3D harmonic rotation: beam width & reach foreshorten dynamically as lamp turns!
+      const rotAngle = (tick * 1350) % Q16_TAU;
+      const beamReach = ((q16Sin(rotAngle) * 185) >> 16);
+      const beamPitch = ((q16Cos(rotAngle) * 26) >> 16);
+      const spread = 14 + (Math.abs(beamReach) >> 3);
+      this.fillLightCone(lhSx, 87, lhSx + beamReach, 64 + beamPitch - spread, 64 + beamPitch + spread, B_AMBER, 22);
+
       this.fillTri({ x: lhSx - 8, y: 94 }, { x: lhSx - 16, y: 217 }, { x: lhSx, y: 217 }, B_IVORY + 27);
       this.fillTri({ x: lhSx - 8, y: 94 }, { x: lhSx + 8, y: 94 }, { x: lhSx, y: 217 }, B_IVORY + 24);
       this.fillTri({ x: lhSx + 8, y: 94 }, { x: lhSx, y: 217 }, { x: lhSx + 16, y: 217 }, B_IVORY + 14);
@@ -141,29 +173,22 @@ export class TownshipFramebuffer {
       this.fillShadedRect(lhSx - 9, 80, lhSx + 9, 94, B_AMBER, 31, 20);
       this.fillTri({ x: lhSx, y: 66 }, { x: lhSx - 11, y: 80 }, { x: lhSx, y: 80 }, B_CRIMSON + 26);
       this.fillTri({ x: lhSx, y: 66 }, { x: lhSx, y: 80 }, { x: lhSx + 11, y: 80 }, B_CRIMSON + 12);
-      const sweep = ((q16Sin((tick * 1500) % Q16_TAU) * 155) >> 16);
-      this.drawLine(lhSx, 87, lhSx + sweep, 44, B_AMBER + 26);
-      this.drawLine(lhSx, 87, lhSx + sweep, 64, B_AMBER + 22);
     }
 
-    // 5. Shaded Colonial Gambrel Houses + Recessed Stealth Doorways
+    // 4. Shaded Colonial Gambrel Houses + Recessed Stealth Doorways
     for (const hx of Array.of(480, 660, 890, 1370, 1650)) {
       const sx = hx - camX;
       if (sx < -65 || sx > FB_WIDTH + 65) continue;
-      this.fillRect(sx - 34, 217, sx + 38, 221, B_WOOD + 2); // Ground shadow
-      this.fillShadedRect(sx + 14, 102, sx + 22, 124, B_CRIMSON, 22, 10); // Chimney
-      // Left-to-right shaded clapboard walls
+      this.fillRect(sx - 34, 217, sx + 38, 221, B_WOOD + 2);
+      this.fillShadedRect(sx + 14, 102, sx + 22, 124, B_CRIMSON, 22, 10);
       this.fillShadedRect(sx - 32, 144, sx + 32, 217, B_IVORY, 25, 13);
       for (let py = 152; py < 217; py += 8) this.drawLine(sx - 32, py, sx + 32, py, B_IVORY + 10);
-      // Shaded Gambrel Roof + Deep Eave Shadow underneath
       this.fillTri({ x: sx - 20, y: 118 }, { x: sx - 36, y: 144 }, { x: sx, y: 144 }, B_WOOD + 20);
       this.fillTri({ x: sx - 20, y: 118 }, { x: sx + 20, y: 118 }, { x: sx, y: 144 }, B_WOOD + 17);
       this.fillTri({ x: sx + 20, y: 118 }, { x: sx, y: 144 }, { x: sx + 36, y: 144 }, B_WOOD + 9);
-      this.fillRect(sx - 32, 144, sx + 32, 147, B_WOOD + 4); // Eave shadow
-      // Deep shadow doorway (stealth hiding spot!)
+      this.fillRect(sx - 32, 144, sx + 32, 147, B_WOOD + 4);
       this.fillRect(sx - 10, 180, sx + 10, 217, B_SKY + 1);
       this.drawRectOutline(sx - 10, 180, sx + 10, 217, B_WOOD + 16);
-      // Glowing amber windows with shadowed frames
       for (const wx of Array.of(sx - 20, sx + 20)) {
         this.fillRect(wx - 6, 158, wx + 6, 174, B_AMBER + 28);
         this.drawLine(wx, 158, wx, 174, B_WOOD + 8);
@@ -171,7 +196,7 @@ export class TownshipFramebuffer {
       }
     }
 
-    // 6. Elevated Platform Ledges & Pushable Cedar Crates
+    // 5. Elevated Platform Ledges & Pushable Cedar Crates
     for (const plat of world.platforms) {
       const sx = plat.x - camX;
       if (sx + plat.w < -10 || sx > FB_WIDTH + 10) continue;
@@ -187,7 +212,7 @@ export class TownshipFramebuffer {
       this.drawLine(sx, c.y, sx + c.w, c.y + c.h, B_WOOD + 16);
     }
 
-    // 7. Verlet Ribbons, Pentatonic Chimes, Faction Stalls & Amber Shards
+    // 6. Verlet Ribbons, Pentatonic Chimes, Faction Stalls & Amber Shards
     for (const rib of extra.canopy.ribbons) {
       for (let i = 1; i < rib.pts.length; i++) {
         const a = rib.pts.at(i - 1), b = rib.pts.at(i);
@@ -224,19 +249,18 @@ export class TownshipFramebuffer {
       this.drawCircleOutline(sx, node.y + bob, 6, B_AMBER + 20, 10);
     }
 
-    // 8. Patrolling Watchers with Sweeping Searchlight Cones & Health Pips
+    // 7. Patrolling Watchers with Volumetric Searchlight Frustum Cone
     for (const f of world.foes) {
       if (!f.alive) continue;
       const sx = (f.x - camX) | 0;
       const sy = f.y | 0;
       if (sx < -40 || sx > FB_WIDTH + 40) continue;
 
-      // Sweeping searchlight gaze cone
-      const reach = sx + f.dir * 100;
-      this.drawLine(sx, sy + 10, reach, sy - 6, B_AMBER + 16);
-      this.drawLine(sx, sy + 10, reach, sy + 30, B_AMBER + 16);
+      const reach = sx + f.dir * 108;
+      const aimY = sy + 14 + (f.gazeSweepY | 0);
+      const coneBank = f.alert ? B_CRIMSON : B_AMBER;
+      this.fillLightCone(sx + f.dir * 6, sy + 6, reach, aimY - 18, aimY + 20, coneBank, f.alert ? 22 : 15);
 
-      // Shaded Watcher cloak + glowing eyes + HP pips
       const cloak = f.hurtTimer > 0 ? (B_IVORY + 30) : (B_ASTRAL + 18);
       this.fillTri({ x: sx, y: sy - 18 }, { x: sx - 14, y: sy + 32 }, { x: sx, y: sy + 32 }, cloak);
       this.fillTri({ x: sx, y: sy - 18 }, { x: sx, y: sy + 32 }, { x: sx + 14, y: sy + 32 }, B_ASTRAL + 9);
@@ -246,7 +270,7 @@ export class TownshipFramebuffer {
       }
     }
 
-    // 9. Manor Gate Threshold (x = 1820)
+    // 8. Manor Gate Threshold (x = 1820)
     const gateSx = 1820 - camX;
     if (gateSx >= -40 && gateSx <= FB_WIDTH + 40) {
       const col = extra.canopy.solved ? (B_PINE + 26) : (B_CRIMSON + 24);
@@ -255,7 +279,7 @@ export class TownshipFramebuffer {
       this.drawRectOutline(gateSx - 14, 134, gateSx + 14, 217, col);
     }
 
-    // 10. Evelyn Roivas + Gladius Slash Arc (or Danmaku Boss Arena)
+    // 9. Evelyn Roivas + Fluid Multi-Frame Crescent Gladius Slash
     if (extra.arena.active) {
       this.renderBulletHellOverlay(extra.arena, tick);
     } else {
@@ -297,7 +321,6 @@ export class TownshipFramebuffer {
     const stride = !p.grounded ? 3 : p.moving ? (((q16Sin((tick * 11000) % Q16_TAU) * 4) >> 16) * p.facing) : 0;
     const coatHi = p.hidden ? (B_SKY + 8) : (B_CRIMSON + 26);
     const coatLo = p.hidden ? (B_SKY + 5) : (B_CRIMSON + 15);
-    // Shaded pointed hood & raincoat
     this.fillTri({ x: cx, y: topY }, { x: cx - 8, y: topY + 12 }, { x: cx, y: topY + 12 }, coatHi);
     this.fillTri({ x: cx, y: topY }, { x: cx, y: topY + 12 }, { x: cx + 8, y: topY + 12 }, coatLo);
     this.fillTri({ x: cx, y: topY + 8 }, { x: cx - 10, y: topY + 25 }, { x: cx, y: topY + 25 }, coatHi);
@@ -311,11 +334,20 @@ export class TownshipFramebuffer {
     this.drawLine(cx + p.facing * 4, topY + 14, handX, handY, B_IVORY + 24);
     if (!p.hidden) this.fillCircle(handX, handY + 2, 3, B_AMBER + 31);
 
-    // Visible Bronze Gladius Slash Arc!
+    // Fluid 14-Frame Damped Angular Gladius Slash + Crescent Ribbon Trail!
     if (p.slashTimer > 0) {
-      const tipX = cx + p.facing * 36;
-      this.drawLine(cx + p.facing * 8, topY + 6, tipX, topY + 16, B_AMBER + 31);
-      this.drawLine(cx + p.facing * 8, topY + 24, tipX, topY + 16, B_IVORY + 30);
+      const progress = 1 - (p.slashTimer / p.slashMax); // 0 -> 1
+      const swingA = -1.25 + progress * 2.55;
+      const trailA = Math.max(-1.25, swingA - 0.65);
+      const bladeLen = 36;
+      const tipX = (handX + p.facing * Math.cos(swingA) * bladeLen) | 0;
+      const tipY = (handY + Math.sin(swingA) * bladeLen) | 0;
+      const trlX = (handX + p.facing * Math.cos(trailA) * (bladeLen - 4)) | 0;
+      const trlY = (handY + Math.sin(trailA) * (bladeLen - 4)) | 0;
+
+      this.fillTri({ x: handX, y: handY }, { x: trlX, y: trlY }, { x: tipX, y: tipY }, B_ASTRAL + 24);
+      this.drawLine(handX, handY, tipX, tipY, B_IVORY + 31);
+      this.fillCircle(tipX, tipY, 2, B_AMBER + 31);
     }
   }
 
@@ -330,18 +362,17 @@ export class TownshipFramebuffer {
     const r2 = r * r;
     for (let dy = -r; dy <= r; dy++) {
       const py = cy + dy;
-      if (py < 0 || py >= FB_HEIGHT) continue;
-      const row = py * FB_WIDTH;
-      for (let dx = -r; dx <= r; dx++) {
-        const px = cx + dx;
-        if (px >= 0 && px < FB_WIDTH && dx * dx + dy * dy <= r2) this.indices[row + px] = c;
-      }
-    }
-  }
-
-  fillTri(a, b, c, col) {
-    const minX = q16Clamp(Math.min(a.x, b.x, c.x), 0, FB_WIDTH - 1);
-    const maxX = q16Clamp(Math.max(a.x, b.x, c.x), 0, FB_WIDTH - 1);
+if (py < 0 || py >= FB_HEIGHT) continue;
+const row = py * FB_WIDTH;
+for (let dx = -r; dx <= r; dx++) {
+const px = cx + dx;
+if (px >= 0 && px < FB_WIDTH && dx * dx + dy * dy <= r2) this.indices[row + px] = c;
+}
+}
+}
+fillTri(a, b, c, col) {
+const minX = q16Clamp(Math.min(a.x, b.x, c.x), 0, FB_WIDTH - 1);
+const maxX = q16Clamp(Math.max(a.x, b.x, c.x), 0, FB_WIDTH - 1);
 const minY = q16Clamp(Math.min(a.y, b.y, c.y), 0, FB_HEIGHT - 1);
 const maxY = q16Clamp(Math.max(a.y, b.y, c.y), 0, FB_HEIGHT - 1);
 const area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
