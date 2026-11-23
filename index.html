@@ -41,13 +41,13 @@
     <button id="chime-btn" class="accent">🔔 Chime</button>
     <button id="gate-btn" class="accent">🚪 Gate</button>
     <button id="narrate-btn">🎙️ Narrate</button>
-    <button id="audio-btn">🎻 Audio On</button>
+    <button id="audio-btn">🎻 Audio</button>
     <select id="track-select">
       <option value="AUTO">🎵 OST: Auto (District)</option>
-      <option value="HARBOR">I. Blackwater Harbor</option>
-      <option value="CANOPY">II. Belfry Nocturne</option>
-      <option value="GUILD">III. Town Square Groove</option>
-      <option value="DANMAKU">IV. Astral Seal</option>
+      <option value="HARBOR">I. Blackwater Mist</option>
+      <option value="ORGAN">II. Chapel Pipe Organ</option>
+      <option value="CALLIOPE">III. Pier Calliope Waltz</option>
+      <option value="DANMAKU">IV. Midnight Toccata</option>
     </select>
   </div>
   <div id="arena-controls" class="controls" style="display:none;">
@@ -265,7 +265,7 @@
       const newLore = chronicle.recordDistrict(zoneKey);
       if (newLore) { logBar.textContent = newLore; narrate(newLore); }
 
-      const trackKey = arena.active ? 'DANMAKU' : (zoneKey === 'CANOPY' || zoneKey === 'MILL') ? 'CANOPY' : 'HARBOR';
+      const trackKey = arena.active ? 'DANMAKU' : zoneKey === 'CANOPY' ? 'ORGAN' : zoneKey === 'MILL' ? 'CALLIOPE' : 'HARBOR';
       const trackName = sound.setAutoTrack(trackKey);
 
       canopy.step(tick, px, world.player.y);
