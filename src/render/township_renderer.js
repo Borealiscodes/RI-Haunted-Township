@@ -330,14 +330,15 @@ export class TownshipFramebuffer {
     const focW = ((240 * arena.focusEnergy) / 100) | 0;
     this.fillRect(120, 228, 120 + focW, 232, arena.slowMo ? (B_AMBER + 30) : (B_SEA + 24));
 
+    const bx = arena.bossX | 0, by = arena.bossY | 0;
     const r = 20;
-    const rot = (tick * 2200) % Q16_TAU;
+    const rot = (tick * 2400) % Q16_TAU;
     for (let i = 0; i < 4; i++) {
       const a = rot + i * 102944;
-      const rx = 240 + ((r * q16Cos(a)) >> 16);
-      const ry = 88 + ((8 * q16Sin(a)) >> 16);
-      this.drawLine(240, 68, rx, ry, B_ASTRAL + 30);
-      this.drawLine(240, 108, rx, ry, B_ASTRAL + 24);
+      const rx = bx + ((r * q16Cos(a)) >> 16);
+      const ry = by + ((8 * q16Sin(a)) >> 16);
+      this.drawLine(bx, by - 20, rx, ry, B_ASTRAL + 30);
+      this.drawLine(bx, by + 20, rx, ry, B_ASTRAL + 24);
     }
 
     for (const b of arena.bullets) {

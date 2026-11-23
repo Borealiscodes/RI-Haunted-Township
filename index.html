@@ -155,7 +155,7 @@
       const res = world.meleeSlash(eco.items.has('BRONZE_GLADIUS'), eco.combatEnabled());
       sound.playChime(220.0, false);
       if (res.event === 'TRIGGER_DANMAKU') {
-        arena.startEncounter(res.foe.name + ' (Stage II: Astral Seal)', res.foe.align, 2);
+        arena.startEncounter(res.foe.name, res.foe.align, 5);
         logBar.textContent = 'PHASE SHIFT! ' + res.foe.name + ' armor shattered—now dodge & parry its Bullet-Hell Spell Card!';
       } else if (res.event === 'SLAIN') {
         eco.souls++;
@@ -258,9 +258,9 @@
         const msg = 'BANISHED ' + arena.bossName + '! (+1 Soul Wisp)';
         logBar.textContent = msg; chronicle.addEvent(msg);
       } else if (res.event === 'HIT') {
-        sound.playChime(440.0, true); logBar.textContent = 'Parried bolt! (' + res.hp + ' HP left)';
+        sound.playChime(440.0); logBar.textContent = 'SPELL CARD BROKEN! (' + res.hp + '/5 left) — Next: ' + res.spell;
       } else {
-        logBar.textContent = 'Graze 6+ bullets or parry close to projectiles!';
+        logBar.textContent = 'Need 10 Grazes (5 in Bullet-Time) or 4 close-range bolts to break Spell Card!';
       }
     });
 
@@ -307,7 +307,7 @@
       const stealth = world.player.hidden ? ' [HIDDEN IN DOORWAY]' : '';
       hud.textContent =
         'District: ' + zoneNames[zoneKey] + ' (' + px + 'm)' + stealth + ' | OST: ' + trackName + ' | Sanity: ' + ((world.sanityQ16 * 100) >> 16) + '%\n' +
-        'Attaché Case: ' + eco.souls + ' Soul Wisps | Relics: ' + relics + (arena.active ? ' | Graze: ' + arena.grazeCount + ' | Focus: ' + (arena.focusEnergy | 0) + '%' : '');
+        'Attaché Case: ' + eco.souls + ' Soul Wisps | Relics: ' + relics + (arena.active ? ' | ' + arena.getSpellName() + ' | Graze: ' + arena.grazeCount + '/10 | Focus: ' + (arena.focusEnergy | 0) + '%' : '');
       chronicleList.innerHTML = chronicle.entries.map((e) => '<p style="margin-bottom:4px;">• ' + e + '</p>').join('');
       requestAnimationFrame(frame);
     }

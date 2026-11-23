@@ -1,51 +1,56 @@
-import { Q16_TAU, q16Cos, q16Sin, q16Clamp } from '../core/q16.js';
+import { Q16_ONE, Q16_TAU, q16Sin, q16Cos, q16Clamp } from '../core/q16.js';
+
+const SPELL_CARDS = Array.of(
+  'Spell V: Walpurgis Eclipse Overload',
+  'Spell IV: Contracting Astral Cage',
+  'Spell III: Curved Sine-Wave Curtains',
+  'Spell II: Gatekeeper Aimed Needle Fan',
+  'Spell I: Crimson Rose Helix'
+);
 
 export class BulletHellArena {
   constructor() {
     this.active = false;
     this.bossName = '';
-    this.bossHp = 3;
-    this.maxHp = 3;
-    this.bossAlign = 0;
-    this.bullets = [];
+    this.align = 0;
+    this.bossHp = 0;
+    this.maxHp = 5;
+    this.bossX = 240;
+    this.bossY = 88;
     this.soulX = 240;
     this.soulY = 196;
-    this.vx = 0;
-    this.vy = 0;
+    this.targetX = 240;
+    this.targetY = 196;
+    this.bullets = [];
     this.grazeCount = 0;
     this.focusEnergy = 100;
     this.slowMo = false;
-    this.phaseAngle = 0;
+    this.angleQ16 = 0;
+    this.rewardFactionId = null;
   }
 
-  startEncounter(bossName, bossAlign, hp = 3) {
+  startEncounter(bossName, align, hp = 5) {
     this.active = true;
     this.bossName = bossName;
-    this.bossAlign = bossAlign;
+    this.align = align;
     this.bossHp = hp;
     this.maxHp = hp;
-    this.bullets = [];
+    this.bossX = 240;
+    this.bossY = 88;
     this.soulX = 240;
-    this.soulY = 196;
-    this.vx = 0;
-    this.vy = 0;
+    this.soulY = 202;
+    this.targetX = 240;
+    this.targetY = 202;
+    this.bullets = [];
     this.grazeCount = 0;
     this.focusEnergy = 100;
     this.slowMo = false;
-    this.phaseAngle = 0;
+    this.angleQ16 = 0;
   }
 
-  setSoulTarget(tx, ty) {
-    this.soulX = q16Clamp(tx, 116, 364);
-    this.soulY = q16Clamp(ty, 96, 226);
-  }
-
-  moveSoul(dx, dy) {
-    const speed = this.slowMo ? 2.1 : 3.4;
-    this.vx += (dx * speed - this.vx) * 0.35;
-    this.vy += (dy * speed - this.vy) * 0.35;
-    this.soulX = q16Clamp(this.soulX + this.vx, 116, 364);
-    this.soulY = q16Clamp(this.soulY + this.vy, 96, 226);
+  getSpellName() {
+    const idx = q16Clamp(this.bossHp - 1, 0, SPELL_CARDS.length - 1);
+    return SPELL_CARDS.at(idx);
   }
 
   toggleBulletTime() {
@@ -54,102 +59,176 @@ export class BulletHellArena {
     return this.slowMo;
   }
 
-  parryBurst() {
-    let deflected = 0;
-    this.bullets = this.bullets.filter((b) => {
-      if (Math.hypot(b.x - this.soulX, b.y - this.soulY) < 38) {
-        deflected++;
-        return false;
-      }
-      return true;
-    });
-    if (deflected > 0 || this.grazeCount >= 6) {
-      this.grazeCount = Math.max(0, this.grazeCount - 6);
-      this.bossHp--;
-      if (this.bossHp <= 0) {
-        this.active = false;
-        this.slowMo = false;
-        return { event: 'BANISHED' };
-      }
-      return { event: 'HIT', hp: this.bossHp };
-    }
-    return { event: 'WHIFF' };
+  setSoulTarget(fbX, fbY) {
+    this.targetX = q16Clamp(fbX, 114, 366);
+    this.targetY = q16Clamp(fbY, 68, 226);
+  }
+
+  moveSoul(dx, dy) {
+    const speed = this.slowMo ? 2.1 : 3.8;
+    this.targetX = q16Clamp(this.targetX + dx * speed, 114, 366);
+    this.targetY = q16Clamp(this.targetY + dy * speed, 68, 226);
   }
 
   step(tick) {
-    if (!this.active) return { hit: false };
+    if (!this.active) return { hit: false, cleared: false };
 
     if (this.slowMo) {
-      this.focusEnergy = Math.max(0, this.focusEnergy - 0.6);
+      this.focusEnergy = Math.max(0, this.focusEnergy - 0.55);
       if (this.focusEnergy <= 0) this.slowMo = false;
     } else {
-      this.focusEnergy = Math.min(100, this.focusEnergy + 0.25);
+      this.focusEnergy = Math.min(100, this.focusEnergy + 0.28);
     }
 
     const timeScale = this.slowMo ? 0.42 : 1.0;
-    const phase = this.maxHp - this.bossHp; // 0 = Rose Spiral, 1 = Aimed Fan, 2 = Twin Vortex
-    this.phaseAngle = (this.phaseAngle + ((6200 * timeScale) | 0)) % Q16_TAU;
+    this.soulX += (this.targetX - this.soulX) * 0.45;
+    this.soulY += (this.targetY - this.soulY) * 0.45;
 
-    const emitPeriod = this.slowMo ? 24 : 12;
+    // Boss glides in a figure-eight Lissajous path across the upper arena
+    const lx = (tick * 1300) % Q16_TAU;
+    const ly = (tick * 2600) % Q16_TAU;
+    this.bossX = 240 + ((72 * q16Cos(lx)) >> 16);
+    this.bossY = 86 + ((10 * q16Sin(ly)) >> 16);
+
+    // Phase escalation: higher difficulty as bossHp drops from 5 -> 1
+    const phase = Math.max(1, 6 - this.bossHp); // 1, 2, 3, 4, 5
+    const emitPeriod = phase >= 5 ? 7 : (phase >= 3 ? 9 : 11);
+
     if (tick % emitPeriod === 0) {
-      if (phase === 0) {
-        // Spell Card I: 5-Petal Rose Counter-Spiral
-        for (let arm = 0; arm < 5; arm++) {
-          const a = (this.phaseAngle + arm * 82355) % Q16_TAU;
+      this.angleQ16 = (this.angleQ16 + 19500 + phase * 3200) % Q16_TAU;
+
+      if (phase === 1) {
+        // Spell I: Dual Counter-Rotating 7-Petal Rose Helix
+        const petals = 7;
+        const stepA = (Q16_TAU / petals) | 0;
+        for (let i = 0; i < petals; i++) {
+          const a1 = (this.angleQ16 + i * stepA) % Q16_TAU;
+          const a2 = (Q16_TAU - this.angleQ16 + i * stepA) % Q16_TAU;
           this.bullets.push({
-            x: 240, y: 88,
-            vx: (q16Cos(a) * 1.9) / 65536,
-            vy: (q16Sin(a) * 1.9) / 65536,
-            grazed: false
+            x: this.bossX, y: this.bossY,
+            vx: (q16Cos(a1) * 2.25) / Q16_ONE, vy: (q16Sin(a1) * 2.25) / Q16_ONE,
+            curve: 0, grazed: false
+          });
+          this.bullets.push({
+            x: this.bossX, y: this.bossY,
+            vx: (q16Cos(a2) * 1.75) / Q16_ONE, vy: (q16Sin(a2) * 1.75) / Q16_ONE,
+            curve: 0, grazed: false
           });
         }
-      } else if (phase === 1) {
-        // Spell Card II: Aimed 5-Way Fan Barrage toward Soul
-        const baseAng = Math.atan2(this.soulY - 88, this.soulX - 240);
-        for (let f = -2; f <= 2; f++) {
-          const ang = baseAng + f * 0.22;
+      } else if (phase === 2) {
+        // Spell II: 9-Way Aimed Needle Fan + Flanking Ring
+        const aimAngle = Math.atan2(this.soulY - this.bossY, this.soulX - this.bossX);
+        for (let f = -4; f <= 4; f++) {
+          const a = aimAngle + f * 0.14;
+          const spd = 2.65 - Math.abs(f) * 0.12;
           this.bullets.push({
-            x: 240, y: 88,
-            vx: Math.cos(ang) * 2.3,
-            vy: Math.sin(ang) * 2.3,
-            grazed: false
+            x: this.bossX, y: this.bossY,
+            vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+            curve: 0, grazed: false
           });
+        }
+      } else if (phase === 3) {
+        // Spell III: Curved Sine-Wave Ribbon Curtains (projectiles bend mid-flight!)
+        const count = 10;
+        const stepA = (Q16_TAU / count) | 0;
+        for (let i = 0; i < count; i++) {
+          const a = (this.angleQ16 + i * stepA) % Q16_TAU;
+          this.bullets.push({
+            x: this.bossX, y: this.bossY,
+            vx: (q16Cos(a) * 2.15) / Q16_ONE, vy: (q16Sin(a) * 2.15) / Q16_ONE,
+            curve: (i & 1) === 0 ? 0.024 : -0.024, grazed: false
+          });
+        }
+      } else if (phase === 4) {
+        // Spell IV: Contracting Astral Cage around Evelyn with a rotating safe corridor
+        if (tick % (emitPeriod * 2) === 0) {
+          const ringN = 16;
+          const safeSlot = ((tick / emitPeriod) | 0) % ringN;
+          for (let i = 0; i < ringN; i++) {
+            if (i === safeSlot || i === ((safeSlot + 1) % ringN)) continue;
+            const theta = (i * Math.PI * 2) / ringN;
+            const sx = this.soulX + Math.cos(theta) * 98;
+            const sy = this.soulY + Math.sin(theta) * 74;
+            this.bullets.push({
+              x: q16Clamp(sx, 110, 370), y: q16Clamp(sy, 60, 232),
+              vx: -Math.cos(theta) * 1.45, vy: -Math.sin(theta) * 1.45,
+              curve: 0, grazed: false
+            });
+          }
         }
       } else {
-        // Spell Card III: Twin Counter-Rotating Vortex
-        for (let arm = 0; arm < 6; arm++) {
-          const dir = (arm & 1) ? 1 : -1;
-          const a = (((this.phaseAngle * dir) + arm * 68629) % Q16_TAU + Q16_TAU) % Q16_TAU;
+        // Spell V: Walpurgis Eclipse Overload (Twin Vortices + Aimed Sniper Bolts)
+        const count = 10;
+        const stepA = (Q16_TAU / count) | 0;
+        for (let i = 0; i < count; i++) {
+          const a = (this.angleQ16 + i * stepA) % Q16_TAU;
           this.bullets.push({
-            x: 240, y: 88,
-            vx: (q16Cos(a) * 2.15) / 65536,
-            vy: (q16Sin(a) * 2.15) / 65536,
-            grazed: false
+            x: this.bossX, y: this.bossY,
+            vx: (q16Cos(a) * 2.45) / Q16_ONE, vy: (q16Sin(a) * 2.45) / Q16_ONE,
+            curve: 0.014, grazed: false
+          });
+        }
+        const aim = Math.atan2(this.soulY - this.bossY, this.soulX - this.bossX);
+        for (const off of [-0.12, 0, 0.12]) {
+          this.bullets.push({
+            x: this.bossX, y: this.bossY,
+            vx: Math.cos(aim + off) * 3.1, vy: Math.sin(aim + off) * 3.1,
+            curve: 0, grazed: false
           });
         }
       }
     }
 
     let hit = false;
-    const nextBullets = [];
     for (const b of this.bullets) {
+      if (b.curve !== 0) {
+        const c = Math.cos(b.curve * timeScale);
+        const s = Math.sin(b.curve * timeScale);
+        const nvx = b.vx * c - b.vy * s;
+        const nvy = b.vx * s + b.vy * c;
+        b.vx = nvx;
+        b.vy = nvy;
+      }
       b.x += b.vx * timeScale;
       b.y += b.vy * timeScale;
-      if (b.x < 108 || b.x > 372 || b.y < 58 || b.y > 234) continue;
-
-      const dist = Math.hypot(b.x - this.soulX, b.y - this.soulY);
-      if (dist < 5.5) {
+      const d = Math.hypot(b.x - this.soulX, b.y - this.soulY);
+      if (d < 4.5) {
         hit = true;
-        continue;
-      }
-      if (!b.grazed && dist < 20) {
+        b.y = 999;
+      } else if (!b.grazed && d < 20) {
         b.grazed = true;
         this.grazeCount++;
-        this.focusEnergy = Math.min(100, this.focusEnergy + 3);
+        this.focusEnergy = Math.min(100, this.focusEnergy + 3.5);
       }
-      nextBullets.push(b);
     }
-    this.bullets = nextBullets;
-    return { hit, graze: this.grazeCount };
+
+    this.bullets = this.bullets.filter((b) => b.x > 102 && b.x < 378 && b.y > 54 && b.y < 238);
+    return { hit, cleared: false };
+  }
+
+  parryBurst() {
+    if (!this.active) return { event: 'NONE' };
+    let clearedCount = 0;
+    for (const b of this.bullets) {
+      if (Math.hypot(b.x - this.soulX, b.y - this.soulY) < 48) {
+        b.y = 999;
+        clearedCount++;
+      }
+    }
+    this.bullets = this.bullets.filter((b) => b.y < 240);
+
+    // Requires 10 Grazes (or 5 in Bullet-Time) or clearing 4+ close-range bolts to break a Spell Card
+    const grazeReq = this.slowMo ? 5 : 10;
+    if (this.grazeCount >= grazeReq || clearedCount >= 4) {
+      this.grazeCount = 0;
+      this.bossHp--;
+      this.bullets = []; // Clear screen on Spell Card break!
+      if (this.bossHp <= 0) {
+        this.active = false;
+        return { event: 'BANISHED' };
+      }
+      return { event: 'HIT', hp: this.bossHp, spell: this.getSpellName() };
+    }
+    return { event: 'WHIFF' };
   }
 }
