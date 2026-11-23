@@ -41,8 +41,14 @@
     <button id="chime-btn" class="accent">🔔 Chime</button>
     <button id="gate-btn" class="accent">🚪 Gate</button>
     <button id="narrate-btn">🎙️ Narrate</button>
-    <button id="audio-btn">🎻 OST</button>
-    <button id="track-btn">🎵 Track</button>
+    <button id="audio-btn">🎻 Audio On</button>
+    <select id="track-select">
+      <option value="AUTO">🎵 OST: Auto (District)</option>
+      <option value="HARBOR">I. Blackwater Harbor</option>
+      <option value="CANOPY">II. Belfry Nocturne</option>
+      <option value="GUILD">III. Town Square Groove</option>
+      <option value="DANMAKU">IV. Astral Seal</option>
+    </select>
   </div>
   <div id="arena-controls" class="controls" style="display:none;">
     <button id="a-left">◀</button>
@@ -260,7 +266,7 @@
       if (newLore) { logBar.textContent = newLore; narrate(newLore); }
 
       const trackKey = arena.active ? 'DANMAKU' : (zoneKey === 'CANOPY' || zoneKey === 'MILL') ? 'CANOPY' : 'HARBOR';
-      const trackName = sound.setTrack(trackKey);
+      const trackName = sound.setAutoTrack(trackKey);
 
       canopy.step(tick, px, world.player.y);
       fluidFog.step(px, world.player.y, world.cameraX, tick);
