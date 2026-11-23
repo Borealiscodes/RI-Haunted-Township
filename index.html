@@ -26,8 +26,6 @@
   <div id="viewport-wrap">
     <canvas id="screen" width="480" height="272"></canvas>
   </div>
-
-  <!-- Exploration Controls -->
   <div id="explore-controls" class="controls">
     <select id="mode-select">
       <option value="RECKONING">👁️ Mode: Reckoning (Hybrid)</option>
@@ -43,8 +41,6 @@
     <button id="narrate-btn">🎙️ Narrate</button>
     <button id="audio-btn">🎻 OST</button>
   </div>
-
-  <!-- Bullet-Hell Danmaku Arena Controls (shown only during ambushes) -->
   <div id="arena-controls" class="controls" style="display:none;">
     <button id="a-left">◀</button>
     <button id="a-up">▲</button>
@@ -52,7 +48,6 @@
     <button id="a-right">▶</button>
     <button id="parry-btn" class="danger">⚔️ Gladius Parry</button>
   </div>
-
   <div id="hud">Initializing Township...</div>
   <details class="chronicle-box" open>
     <summary>📜 BLACKWATER COVE CHRONICLE (STORY LOG)</summary>
@@ -90,14 +85,7 @@
 
     logBar.textContent = OPENING_PROLOGUE;
 
-    const nodes = Array.of(
-      { x: 180, collected: false },
-      { x: 540, collected: false },
-      { x: 920, collected: false },
-      { x: 1340, collected: false },
-      { x: 1680, collected: false }
-    );
-
+    const nodes = Array.of({ x: 180, collected: false }, { x: 540, collected: false }, { x: 920, collected: false }, { x: 1340, collected: false }, { x: 1680, collected: false });
     const foes = Array.of(
       { x: 680, align: ALIGN.CHATTURGHA, name: 'Harbor Zealot', alive: true },
       { x: 1280, align: ALIGN.XELLOTATH, name: 'Canopy Stalker', alive: true },
@@ -105,19 +93,9 @@
     );
 
     const state = {
-      playerX: 110,
-      playerY: 186,
-      cameraX: 0,
-      facing: 1,
-      moving: false,
-      sanityQ16: Q16_ONE,
-      activeAlign: ALIGN.ULYAOTH,
-      hasTuningFork: false,
-      canopy,
-      fluidFog,
-      arena,
-      nodes,
-      foes
+      playerX: 110, playerY: 186, cameraX: 0, facing: 1, moving: false,
+      sanityQ16: Q16_ONE, activeAlign: ALIGN.ULYAOTH, hasTuningFork: false,
+      canopy, fluidFog, arena, nodes, foes
     };
 
     let moveX = 0, moveY = 0, tick = 0;
@@ -139,26 +117,14 @@
       u.rate = 0.95;
       window.speechSynthesis.speak(u);
     }
-    document.getElementById('narrate-btn').addEventListener('click', () => {
-      unlockAudio();
-      narrate(chronicle.entries.at(-1));
-    });
-
-    document.getElementById('mode-select').addEventListener('change', (e) => {
-      eco.setMode(e.target.value);
-      logBar.textContent = 'Playstyle mode set to ' + eco.mode + '.';
-    });
-
+    document.getElementById('narrate-btn').addEventListener('click', () => { unlockAudio(); narrate(chronicle.entries.at(-1)); });
+    document.getElementById('mode-select').addEventListener('change', (e) => { eco.setMode(e.target.value); logBar.textContent = 'Mode: ' + eco.mode; });
     const bindHold = (id, dx, dy) => {
-      const el = document.getElementById(id);
-      el.addEventListener('pointerdown', () => { moveX = dx; moveY = dy; unlockAudio(); });
+      document.getElementById(id).addEventListener('pointerdown', () => { moveX = dx; moveY = dy; unlockAudio(); });
     };
-    bindHold('left-btn', -1, 0);
-    bindHold('right-btn', 1, 0);
-    bindHold('a-left', -1, 0);
-    bindHold('a-right', 1, 0);
-    bindHold('a-up', 0, -1);
-    bindHold('a-down', 0, 1);
+    bindHold('left-btn', -1, 0); bindHold('right-btn', 1, 0);
+    bindHold('a-left', -1, 0); bindHold('a-right', 1, 0);
+    bindHold('a-up', 0, -1); bindHold('a-down', 0, 1);
     window.addEventListener('pointerup', () => { moveX = 0; moveY = 0; });
 
     window.addEventListener('keydown', (e) => {
@@ -172,19 +138,16 @@
       if (['ArrowUp','w','ArrowDown','s'].includes(e.key)) moveY = 0;
     });
 
-    // Dedicated Exploration Action Buttons
     document.getElementById('gather-btn').addEventListener('click', () => {
       unlockAudio();
       for (const n of nodes) {
         if (!n.collected && Math.abs(state.playerX - n.x) < 34) {
-          n.collected = true;
-          eco.amberShards++;
-          sound.playChime(466.16, true);
+          n.collected = true; eco.amberShards++; sound.playChime(466.16, true);
           logBar.textContent = 'Gathered Amber Resin Shard (+1 Shard).';
           return;
         }
       }
-      logBar.textContent = 'No Amber Resin nodes within reach. Look for glowing shards along the road.';
+      logBar.textContent = 'No Amber Resin nodes within reach.';
     });
 
     document.getElementById('trade-btn').addEventListener('click', () => {
@@ -197,7 +160,7 @@
         logBar.textContent = trade.msg;
         chronicle.addEvent(trade.msg);
       } else {
-        logBar.textContent = 'No faction guild outpost nearby. Visit Bell-Keepers (340m), Flesh-Harvesters (760m), or Archive Remnant (1460m).';
+        logBar.textContent = 'Visit Bell-Keepers (340m), Flesh-Harvesters (760m), or Archive Remnant (1460m).';
       }
     });
 
@@ -206,26 +169,22 @@
       const hit = canopy.ringNearestChime(state.playerX);
       if (hit) {
         sound.playChime(hit.chime.hz, true);
-        const msg = hit.solved
-          ? 'CHIME LOCK UNSEALED! The Manor Gate at 1820m is now open!'
-          : 'Struck Bell-Tower chime ' + hit.chime.note + ' (Wind sequence: Eb4 -> A4 -> D4).';
+        const msg = hit.solved ? 'CHIME LOCK UNSEALED! The Manor Gate at 1820m is open!' : 'Struck ' + hit.chime.note + ' (Code: Eb4 -> A4 -> D4).';
         logBar.textContent = msg;
         if (hit.solved) chronicle.addEvent(msg);
       } else {
-        logBar.textContent = 'Walk beneath the Bell-Tower Canopy (1020m–1200m) to strike a suspended bronze chime.';
+        logBar.textContent = 'Walk under the Bell-Tower Canopy (1020m-1200m) to ring chimes.';
       }
     });
 
     document.getElementById('gate-btn').addEventListener('click', () => {
       unlockAudio();
       if (state.playerX >= 1775) {
-        const msg = canopy.solved
-          ? 'CHAPTER COMPLETE: With the Bell-Tower chimes harmonized, the wrought-iron gates of Roivas Manor swing open before midnight!'
-          : 'The Manor Gate is sealed by a harmonic lock. Ring Eb4 -> A4 -> D4 in the Bell-Tower Canopy (1020m–1200m) first.';
+        const msg = canopy.solved ? 'CHAPTER COMPLETE: Roivas Manor gates swing open before midnight!' : 'Sealed by harmonic chime lock in Bell-Tower Canopy (Eb4 -> A4 -> D4).';
         logBar.textContent = msg;
         if (canopy.solved) { chronicle.addEvent(msg); narrate(msg); }
       } else {
-        logBar.textContent = 'The Manor Gates lie at the eastern end of the Old Mill road (1820m).';
+        logBar.textContent = 'Manor Gates lie at 1820m.';
       }
     });
 
@@ -233,16 +192,13 @@
       unlockAudio();
       const res = arena.parryBurst();
       if (res.event === 'BANISHED') {
-        sound.playChime(587.33, true);
-        eco.amberShards++;
-        const msg = 'BANISHED ' + arena.bossName + '! Recovered +1 Amber Shard.';
-        logBar.textContent = msg;
-        chronicle.addEvent(msg);
+        sound.playChime(587.33, true); eco.amberShards++;
+        const msg = 'BANISHED ' + arena.bossName + '! (+1 Amber Shard)';
+        logBar.textContent = msg; chronicle.addEvent(msg);
       } else if (res.event === 'HIT') {
-        sound.playChime(440.0, true);
-        logBar.textContent = 'Parried bolt into ' + arena.bossName + '! (' + res.hp + ' HP left)';
+        sound.playChime(440.0, true); logBar.textContent = 'Parried bolt! (' + res.hp + ' HP left)';
       } else {
-        logBar.textContent = 'Graze bullets (8+ Graze) or parry close to projectiles to strike!';
+        logBar.textContent = 'Graze 8+ bullets or parry close to projectiles!';
       }
     });
 
@@ -257,19 +213,14 @@
         if (res.hit) state.sanityQ16 = q16Clamp(state.sanityQ16 - 4096, 0, Q16_ONE);
       } else {
         state.moving = moveX !== 0;
-        if (moveX !== 0) {
-          state.facing = moveX > 0 ? 1 : -1;
-          state.playerX = q16Clamp(state.playerX + moveX * 3, 24, 1890);
-        }
+        if (moveX !== 0) { state.facing = moveX > 0 ? 1 : -1; state.playerX = q16Clamp(state.playerX + moveX * 3, 24, 1890); }
         state.cameraX = q16Clamp(state.playerX - 180, 0, 1920 - FB_WIDTH);
-
         if (eco.combatEnabled()) {
           for (const f of foes) {
             if (f.alive && Math.abs(state.playerX - f.x) < 28) {
-              f.alive = false;
-              state.activeAlign = f.align;
+              f.alive = false; state.activeAlign = f.align;
               arena.startEncounter(f.name, f.align, eco.items.has('BRONZE_GLADIUS') ? 2 : 3);
-              logBar.textContent = 'AMBUSH! ' + f.name + ' traps you in a Danmaku ring! Dodge and tap [⚔️ Gladius Parry]!';
+              logBar.textContent = 'AMBUSH! ' + f.name + ' triggers Danmaku! Tap [⚔️ Gladius Parry]!';
               break;
             }
           }
@@ -297,125 +248,7 @@
       chronicleList.innerHTML = chronicle.entries.map((e) => '<p style="margin-bottom:4px;">• ' + e + '</p>').join('');
       requestAnimationFrame(frame);
     }
-
-tail -n 4 index.html && \
-npm test && \
-git add src/story/township_chronicle.js src/render/township_renderer.js index.html && \
-git commit -m "feat(art,story,ux): add Van Gogh impasto sky/waves/trees, Blackwater Cove chronicle, and separate action controls" && \
-git push origin main && \
-python3 -m http.server 8080 --bind 127.0.0.1
-
-cat << 'EOF' > src/render/township_renderer.js
-import { Q16_ONE, Q16_TAU, q16Clamp, q16Sin, q16Cos } from '../core/q16.js';
-import { PENTATONIC_CHIMES } from '../physics/verlet_canopy.js';
-import { FACTIONS } from '../economy/faction_attache.js';
-
-export const FB_WIDTH = 480;
-export const FB_HEIGHT = 272;
-
-const BAYER_4X4 = Uint8Array.of(0,8,2,10, 12,4,14,6, 3,11,1,9, 15,7,13,5);
-
-export function buildTownshipCLUT8() {
-  const lut = new Uint32Array(256);
-  const ramps = Array.of(
-    Array.of(235, 34, 54),   // 0: Chattur'gha (Crimson)
-    Array.of(44, 154, 248),  // 1: Ulyaoth (Cobalt)
-    Array.of(40, 226, 126),  // 2: Xel'lotath (Emerald)
-    Array.of(184, 78, 244)   // 3: Mantorok (Amethyst)
-  );
-  for (let bank = 0; bank < 4; bank++) {
-    const r0 = ramps.at(bank).at(0), g0 = ramps.at(bank).at(1), b0 = ramps.at(bank).at(2);
-    for (let i = 0; i < 64; i++) {
-      const c = i < 4 ? i : ((i * i) >> 6);
-      const r = Math.min(255, ((r0 * c) >> 6) + (i > 52 ? (i - 52) * 16 : 0));
-      const g = Math.min(255, ((g0 * c) >> 6) + (i > 52 ? (i - 52) * 16 : 0));
-      const b = Math.min(255, ((b0 * c) >> 6) + (i > 52 ? (i - 52) * 16 : 0));
-      lut[(bank << 6) + i] = (255 << 24) | (b << 16) | (g << 8) | r;
-    }
-  }
-  return lut;
-}
-
-export class TownshipFramebuffer {
-  constructor() {
-    this.indices = new Uint8Array(FB_WIDTH * FB_HEIGHT);
-    this.clut = buildTownshipCLUT8();
-    this.rgba32 = new Uint32Array(FB_WIDTH * FB_HEIGHT);
-  }
-
-  /** Paint a thick 3px-wide directional impasto oil stroke with highlight edge */
-  drawImpastoStroke(x0, y0, x1, y1, baseCol) {
-    this.drawLine(x0, y0 - 1, x1, y1 - 1, Math.min(255, baseCol + 8));
-    this.drawLine(x0, y0, x1, y1, baseCol);
-    this.drawLine(x0, y0 + 1, x1, y1 + 1, Math.max(1, baseCol - 6));
-  }
-
-  renderWorld(state, tick) {
-    const camX = state.cameraX | 0;
-    const bank = (state.activeAlign & 3) << 6;
-    const pxScreen = (state.playerX - camX) | 0;
-    const pyScreen = state.playerY | 0;
-    const lanternR = state.hasTuningFork ? 155 : 112;
-    const lanternRSq = lanternR * lanternR;
-
-    // 1. Base Sky + Radial Fluid Fog + Lantern Cone
-    for (let y = 0; y < FB_HEIGHT; y++) {
-      const row = y * FB_WIDTH;
-      const bRow = (y & 3) << 2;
-      const dy = y - (pyScreen + 12);
-      const dy2 = dy * dy;
-      const isGround = y >= 218;
-
-      for (let x = 0; x < FB_WIDTH; x++) {
-        const dx = x - pxScreen;
-        const d2 = dx * dx + dy2;
-        const fog = state.fluidFog.sampleFog(x, y);
-        let light = isGround ? 9 : (4 + (fog >> 1));
-
-        if (d2 < lanternRSq) {
-          const beam = 26 - (((d2 * 21) / lanternRSq) | 0);
-          light = q16Clamp(beam + (isGround ? 6 : 0), 4, 36);
-        }
-        const dither = BAYER_4X4[bRow + (x & 3)] >> 2;
-        this.indices[row + x] = bank + q16Clamp(light + dither, 2, 40);
-      }
-    }
-
-    // 2. Immersive Van Gogh Thick Impasto Sky Flow Field & Wind Eddies
-    for (let sy = 14; sy < 132; sy += 14) {
-      for (let sx = -16; sx < FB_WIDTH + 16; sx += 26) {
-        const wx = sx + (camX >> 1);
-        const angle = ((q16Sin(((wx * 700) + (sy * 1300) + (tick * 900)) % Q16_TAU) * 28000) >> 16);
-        const dx = (11 * q16Cos(angle)) >> 16;
-        const dy = (11 * q16Sin(angle)) >> 16;
-        const tone = bank + 18 + (((wx >> 4) + (sy >> 3)) & 15);
-        this.drawImpastoStroke(sx - dx, sy - dy, sx + dx, sy + dy, tone);
-      }
-    }
-
-    // 3. Swirling Starry Vortex, Crescent Moon & Concentric Star Halos
-    const moonX = 365 - ((camX >> 3) % 110);
-    const moonY = 44;
-    this.drawCircleOutline(moonX, moonY, 13, bank + 63, 18);
-    this.drawCircleOutline(moonX + 4, moonY - 2, 11, bank + 10, 16);
-    for (let ring = 1; ring <= 3; ring++) {
-      const rad = 18 + ring * 11;
-      for (let s = 0; s < 8; s++) {
-        const a0 = (((tick * 1100) + s * 51472 + ring * 14000) % Q16_TAU);
-        const a1 = (a0 + 25000) % Q16_TAU;
-        this.drawImpastoStroke(
-          moonX + ((rad * q16Cos(a0)) >> 16), moonY + (((rad >> 1) * q16Sin(a0)) >> 16),
-          moonX + ((rad * q16Cos(a1)) >> 16), moonY + (((rad >> 1) * q16Sin(a1)) >> 16),
-          bank + 34 + ring * 6
-        );
-      }
-    }
-
-    // Pulsing Van Gogh Star Halos across the sky
-    for (const st of Array.of({ x: 75, y: 32 }, { x: 195, y: 58 }, { x: 280, y: 26 }, { x: 435, y: 68 })) {
-      const sx = ((st.x - (camX >> 2)) + 480) % 480;
-      const pulse = (tick >> 3) & 3;
-      this.drawCircleOutline(sx, st.y, 3, bank + 63, 10);
-      this.drawCircleOutline(sx, st.y, 7 + pulse, bank + 44, 14);
-      this.drawCircleOutline(sx, st.y, 12 + pulse, bank + 28, 16);
-    }
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
