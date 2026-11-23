@@ -40,6 +40,7 @@
     <button id="trade-btn" class="accent">🤝 Trade</button>
     <button id="chime-btn" class="accent">🔔 Chime</button>
     <button id="gate-btn" class="accent">🚪 Gate</button>
+    <button id="narrate-btn">🎙️ Narrate</button>
     <button id="audio-btn">🎻 Legato OST</button>
   </div>
   <div id="arena-controls" class="controls" style="display:none;">
@@ -89,6 +90,23 @@
 
     logBar.textContent = OPENING_PROLOGUE;
     let moveX = 0, moveY = 0, tick = 0, draggingSoul = false;
+
+    
+    function narrate(txt) {
+      if (!("speechSynthesis" in window) || !txt) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(txt);
+      const gb = window.speechSynthesis.getVoices().find((v) => /en[-_]GB/i.test(v.lang));
+      if (gb) u.voice = gb;
+      u.lang = "en-GB";
+      u.pitch = 0.86;
+      u.rate = 0.94;
+      window.speechSynthesis.speak(u);
+    }
+    document.getElementById("narrate-btn").addEventListener("click", () => {
+      unlockAudio();
+      narrate(chronicle.entries.at(-1));
+    });
 
     function unlockAudio() {
       sound.start();
@@ -195,7 +213,7 @@
       if (world.player.x >= 1775) {
         const msg = canopy.solved ? 'CHAPTER COMPLETE: Roivas Manor gates swing open before midnight!' : 'Sealed by harmonic chime lock in Bell-Tower Canopy (Eb4 -> A4 -> D4).';
         logBar.textContent = msg;
-        if (canopy.solved) chronicle.addEvent(msg);
+        if (canopy.solved) { chronicle.addEvent(msg); narrate(msg); }
       } else {
         logBar.textContent = 'Manor Gates lie at 1820m.';
       }
@@ -238,7 +256,7 @@
       const px = world.player.x;
       const zoneKey = px < 480 ? 'HARBOR' : px < 960 ? 'SQUARE' : px < 1440 ? 'CANOPY' : 'MILL';
       const newLore = chronicle.recordDistrict(zoneKey);
-      if (newLore) logBar.textContent = newLore;
+      if (newLore) { logBar.textContent = newLore; narrate(newLore); }
 
       const trackKey = arena.active ? 'DANMAKU' : (zoneKey === 'CANOPY' || zoneKey === 'MILL') ? 'CANOPY' : 'HARBOR';
       const trackName = sound.setTrack(trackKey);

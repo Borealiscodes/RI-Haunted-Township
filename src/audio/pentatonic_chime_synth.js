@@ -1,44 +1,58 @@
-import { Q16_ONE, q16Clamp, GaloisLFSR16 } from '../core/q16.js';
+import { Q16_ONE, q16Clamp } from '../core/q16.js';
 
-// 4-phrase (32-bar) harmonic progressions per track so music evolves continuously
+// Pure consonant D Natural Minor & D Pentatonic progressions (zero clashing dissonances)
 const TRACKS = {
   HARBOR: {
-    name: 'I. Blackwater Tide (Generative)',
-    beatMs: 390,
+    name: 'I. Blackwater Tide',
+    beatMs: 420,
     phrases: [
-      [73.42, 58.27, 49.00, 55.00], // A: D minor coastal swell
-      [73.42, 65.41, 58.27, 55.00], // B: Descending Dorian tide
-      [49.00, 58.27, 65.41, 55.00], // C: Subdominant fog lift
-      [73.42, 51.91, 49.00, 55.00]  // D: Phrygian cadence
+      [73.42, 58.27, 65.41, 73.42], // Dm -> Bb -> C -> Dm
+      [73.42, 49.00, 58.27, 55.00], // Dm -> Gm -> Bb -> A
+      [58.27, 65.41, 73.42, 73.42], // Bb -> C -> Dm -> Dm
+      [49.00, 58.27, 55.00, 73.42]  // Gm -> Bb -> A -> Dm
     ],
-    scale: [293.66, 329.63, 349.23, 392.00, 440.00, 466.16, 523.25, 587.33],
-    metallic: false,
+    // Consonant D-minor pentatonic scale (D4, F4, G4, A4, C5, D5)
+    melody: [
+      293.66, 349.23, 440.00, 392.00, 349.23, 293.66, 261.63, 293.66,
+      349.23, 440.00, 523.25, 440.00, 392.00, 349.23, 329.63, 293.66,
+      261.63, 293.66, 349.23, 392.00, 440.00, 392.00, 349.23, 293.66,
+      329.63, 349.23, 392.00, 440.00, 349.23, 329.63, 293.66, 0
+    ],
     pulse: false
   },
   CANOPY: {
     name: 'II. Wind-Chime Belfry',
-    beatMs: 340,
+    beatMs: 360,
     phrases: [
-      [73.42, 73.42, 58.27, 55.00],
-      [65.41, 58.27, 51.91, 55.00],
-      [73.42, 87.31, 65.41, 55.00],
-      [58.27, 51.91, 49.00, 55.00]
+      [73.42, 73.42, 58.27, 73.42],
+      [65.41, 58.27, 55.00, 73.42],
+      [73.42, 65.41, 58.27, 73.42],
+      [58.27, 55.00, 73.42, 73.42]
     ],
-    scale: [293.66, 311.13, 392.00, 440.00, 466.16, 554.37, 587.33, 622.25],
-    metallic: true,
+    // Consonant D Hirajoshi (D4, Eb4, G4, A4, Bb4, D5)
+    melody: [
+      293.66, 311.13, 392.00, 440.00, 466.16, 440.00, 392.00, 311.13,
+      293.66, 392.00, 440.00, 587.33, 466.16, 440.00, 392.00, 293.66,
+      311.13, 392.00, 466.16, 440.00, 392.00, 311.13, 293.66, 0,
+      392.00, 440.00, 466.16, 587.33, 440.00, 392.00, 293.66, 0
+    ],
     pulse: false
   },
   DANMAKU: {
     name: 'III. Walpurgis Reckoning',
-    beatMs: 195,
+    beatMs: 210,
     phrases: [
-      [73.42, 77.78, 82.41, 87.31],
-      [87.31, 82.41, 77.78, 55.00],
-      [73.42, 98.00, 87.31, 82.41],
-      [77.78, 73.42, 65.41, 55.00]
+      [73.42, 73.42, 58.27, 55.00],
+      [73.42, 65.41, 58.27, 55.00],
+      [49.00, 58.27, 65.41, 55.00],
+      [73.42, 58.27, 55.00, 73.42]
     ],
-    scale: [349.23, 392.00, 440.00, 466.16, 554.37, 587.33, 659.25, 698.46],
-    metallic: false,
+    melody: [
+      587.33, 440.00, 349.23, 440.00, 523.25, 440.00, 392.00, 349.23,
+      329.63, 392.00, 440.00, 523.25, 587.33, 523.25, 440.00, 392.00,
+      349.23, 440.00, 523.25, 587.33, 659.25, 587.33, 523.25, 440.00,
+      392.00, 349.23, 329.63, 440.00, 349.23, 329.63, 293.66, 0
+    ],
     pulse: true
   }
 };
@@ -54,7 +68,6 @@ export class TownshipSoundscape {
     this.timer = null;
     this.step = 0;
     this.currentTrackKey = 'HARBOR';
-    this.lfsr = new GaloisLFSR16(0x9b4d);
   }
 
   start() {
@@ -66,17 +79,17 @@ export class TownshipSoundscape {
     this.ctx = new Ctor();
 
     this.master = this.ctx.createGain();
-    this.master.gain.value = 0.32;
+    this.master.gain.value = 0.28;
 
     this.filter = this.ctx.createBiquadFilter();
     this.filter.type = 'lowpass';
-    this.filter.frequency.value = 720;
-    this.filter.Q.value = 1.6;
+    this.filter.frequency.value = 620;
+    this.filter.Q.value = 1.2;
 
     const delay = this.ctx.createDelay(1.2);
-    delay.delayTime.value = 0.44;
+    delay.delayTime.value = 0.42;
     const fb = this.ctx.createGain();
-    fb.gain.value = 0.48;
+    fb.gain.value = 0.42;
     delay.connect(fb);
     fb.connect(delay);
 
@@ -85,6 +98,7 @@ export class TownshipSoundscape {
     delay.connect(this.master);
     this.master.connect(this.ctx.destination);
 
+    // Warm consonant bowed cello (root + pure octave/fifth)
     this.cello1 = this.ctx.createOscillator();
     this.cello1.type = 'sawtooth';
     this.cello1.frequency.value = 73.42;
@@ -95,15 +109,15 @@ export class TownshipSoundscape {
 
     const lfo = this.ctx.createOscillator();
     const lfoGain = this.ctx.createGain();
-    lfo.frequency.value = 4.6;
-    lfoGain.gain.value = 1.7;
+    lfo.frequency.value = 4.2;
+    lfoGain.gain.value = 1.1;
     lfo.connect(lfoGain);
     lfoGain.connect(this.cello1.frequency);
     lfoGain.connect(this.cello2.frequency);
     lfo.start();
 
     this.celloGain = this.ctx.createGain();
-    this.celloGain.gain.value = 0.16;
+    this.celloGain.gain.value = 0.14;
     this.cello1.connect(this.celloGain);
     this.cello2.connect(this.celloGain);
     this.celloGain.connect(this.filter);
@@ -127,45 +141,50 @@ export class TownshipSoundscape {
     return TRACKS[this.currentTrackKey].name;
   }
 
-  playChime(hz, metallic = true, dur = 1.65) {
+  playChime(hz, bellOvertone = false, dur = 1.45) {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
-    const over = this.ctx.createOscillator();
     const env = this.ctx.createGain();
     osc.type = 'sine';
-    over.type = 'triangle';
     osc.frequency.setValueAtTime(hz, now);
-    over.frequency.setValueAtTime(hz * (metallic ? 2.756 : 1.5), now);
-    const ovG = this.ctx.createGain();
-    ovG.gain.value = 0.028;
 
     env.gain.setValueAtTime(0.001, now);
-    env.gain.exponentialRampToValueAtTime(0.09, now + 0.07);
+    env.gain.exponentialRampToValueAtTime(0.085, now + 0.05);
     env.gain.exponentialRampToValueAtTime(0.0005, now + dur);
 
     osc.connect(env);
-    over.connect(ovG);
-    ovG.connect(env);
     env.connect(this.filter);
     osc.start(now);
-    over.start(now);
-    osc.stop(now + dur + 0.05);
-    over.stop(now + dur + 0.05);
+    osc.stop(now + dur + 0.04);
+
+    if (bellOvertone) {
+      const ov = this.ctx.createOscillator();
+      const ovEnv = this.ctx.createGain();
+      ov.type = 'sine';
+      ov.frequency.setValueAtTime(hz * 2.0, now); // Clean octave shimmer
+      ovEnv.gain.setValueAtTime(0.001, now);
+      ovEnv.gain.exponentialRampToValueAtTime(0.035, now + 0.02);
+      ovEnv.gain.exponentialRampToValueAtTime(0.0004, now + 0.9);
+      ov.connect(ovEnv);
+      ovEnv.connect(this.filter);
+      ov.start(now);
+      ov.stop(now + 0.95);
+    }
   }
 
   _playHeartbeat(now) {
     const osc = this.ctx.createOscillator();
     const env = this.ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(92, now);
-    osc.frequency.exponentialRampToValueAtTime(36, now + 0.18);
-    env.gain.setValueAtTime(0.24, now);
-    env.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc.frequency.setValueAtTime(88, now);
+    osc.frequency.exponentialRampToValueAtTime(38, now + 0.16);
+    env.gain.setValueAtTime(0.22, now);
+    env.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
     osc.connect(env);
     env.connect(this.master);
     osc.start(now);
-    osc.stop(now + 0.24);
+    osc.stop(now + 0.22);
   }
 
   _tick() {
@@ -178,31 +197,22 @@ export class TownshipSoundscape {
     const barIdx = (s >> 2) & 3;
     const bassHz = trk.phrases[phraseIdx][barIdx];
 
-    // Smooth portamento cello swell every 4 beats
     if ((s & 3) === 0) {
-      this.cello1.frequency.setTargetAtTime(bassHz, now, 0.30);
-      this.cello2.frequency.setTargetAtTime(bassHz * (phraseIdx === 2 ? 1.189 : 1.498), now, 0.30);
-      this.celloGain.gain.setTargetAtTime(0.21, now, 0.20);
-      this.celloGain.gain.setTargetAtTime(0.13, now + 0.50, 0.32);
-    }
-
-    // Expressive tenor counter-melody on Phrase B & D
-    if ((phraseIdx === 1 || phraseIdx === 3) && (s & 3) === 2) {
-      this.playChime(bassHz * 3.0, false, 2.1);
+      this.cello1.frequency.setTargetAtTime(bassHz, now, 0.28);
+      this.cello2.frequency.setTargetAtTime(bassHz * 2.0, now, 0.28); // Pure octave harmony
+      this.celloGain.gain.setTargetAtTime(0.18, now, 0.18);
+      this.celloGain.gain.setTargetAtTime(0.12, now + 0.45, 0.30);
     }
 
     if (trk.pulse && (s & 1) === 0) this._playHeartbeat(now);
 
-    // Generative non-repeating melodic phrasing driven by LFSR + phrase contour
-    const rBit = this.lfsr.nextBit();
-    if ((s & 7) === 7 && rBit === 0) return; // Organic breathing rest
-    const scaleIdx = ((s * 3) + phraseIdx * 2 + (rBit ? 1 : 0)) % trk.scale.length;
-    this.playChime(trk.scale[scaleIdx], trk.metallic, 1.55);
+    const note = trk.melody[s % trk.melody.length];
+    if (note > 0) this.playChime(note, false, 1.4);
   }
 
   updateTension(sanityQ16 = Q16_ONE, inBulletHell = false, slowMo = false) {
     if (!this.ctx || !this.filter) return;
-    const cutoff = slowMo ? 360 : (inBulletHell ? 1300 : 720);
+    const cutoff = slowMo ? 340 : (inBulletHell ? 1100 : 620);
     this.filter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, 0.16);
   }
 }
