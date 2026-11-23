@@ -1,15 +1,14 @@
-import { Q16_ONE, q16Sin, q16Clamp, Q16_TAU } from '../core/q16.js';
+import { Q16_ONE, q16Sin, Q16_TAU } from '../core/q16.js';
 
-// D Hirajoshi / In-Sen haunted pentatonic frequencies (Hz)
+// 5 Color-Coded Journey-style Harmonic Chimes (D Hirajoshi pentatonic)
 export const PENTATONIC_CHIMES = Array.of(
-  { id: 0, note: 'D4',  hz: 293.66, x: 1020 },
-  { id: 1, note: 'Eb4', hz: 311.13, x: 1065 },
-  { id: 2, note: 'G4',  hz: 392.00, x: 1110 },
-  { id: 3, note: 'A4',  hz: 440.00, x: 1155 },
-  { id: 4, note: 'Bb4', hz: 466.16, x: 1200 }
+  { id: 0, num: 1, name: 'Azure',    note: 'D4',  hz: 293.66, x: 1020, bank: 32 }, // Atlantic Teal/Azure
+  { id: 1, num: 2, name: 'Crimson',  note: 'Eb4', hz: 311.13, x: 1065, bank: 192 }, // Crimson
+  { id: 2, num: 3, name: 'Emerald',  note: 'G4',  hz: 392.00, x: 1110, bank: 128 }, // Evergreen/Emerald
+  { id: 3, num: 4, name: 'Gold',     note: 'A4',  hz: 440.00, x: 1155, bank: 160 }, // Lantern Gold
+  { id: 4, num: 5, name: 'Amethyst', note: 'Bb4', hz: 466.16, x: 1200, bank: 224 }  // Astral Amethyst
 );
 
-/** Verlet Cloth Ribbon (tattered banners & bell-tower canopy fabrics) */
 export class VerletRibbon {
   constructor(anchorX, anchorY, segments = 6, segLen = 9) {
     this.anchorX = anchorX;
@@ -34,13 +33,11 @@ export class VerletRibbon {
       p.x += vx;
       p.y += vy;
 
-      // Player brushing through canopy fabric
       if (Math.hypot(p.x - playerX, p.y - playerY) < 22) {
         p.x += (p.x >= playerX ? 2.2 : -2.2);
       }
     }
 
-    // Distance constraint relaxation
     for (let iter = 0; iter < 2; iter++) {
       for (let i = 1; i < this.pts.length; i++) {
         const a = this.pts.at(i - 1);
@@ -62,10 +59,11 @@ export class VerletRibbon {
 
 export class CanopyChimePuzzle {
   constructor() {
-    // Secret 3-note wind sequence: Eb4 (1) -> A4 (3) -> D4 (0)
+    // Sequence: #2 Crimson (Eb4) -> #4 Gold (A4) -> #1 Azure (D4)
     this.targetCode = Array.of(1, 3, 0);
     this.entered = [];
     this.solved = false;
+    this.ripples = []; // Expanding Journey-style visual halo rings
     this.ribbons = Array.of(
       new VerletRibbon(220, 42, 6, 8),
       new VerletRibbon(640, 38, 7, 9),
@@ -78,6 +76,12 @@ export class CanopyChimePuzzle {
   step(tick, playerX, playerY) {
     const wind = ((q16Sin((tick * 1900) % Q16_TAU) * 1.1) / Q16_ONE) + 0.35;
     for (const r of this.ribbons) r.step(wind, playerX, playerY);
+
+    for (const rip of this.ripples) {
+      rip.r += 1.6;
+      rip.life--;
+    }
+    this.ripples = this.ripples.filter((rip) => rip.life > 0);
   }
 
   ringNearestChime(playerX) {
@@ -89,16 +93,19 @@ export class CanopyChimePuzzle {
     }
     if (!best) return null;
 
+    // Emit expanding colored halo ripple
+    this.ripples.push({ x: best.x, y: 140, r: 6, bank: best.bank, life: 28 });
+
     if (!this.solved) {
-      this.entered.push(best.id);
-      if (this.entered.length > this.targetCode.length) this.entered.shift();
-      if (
-        this.entered.length === this.targetCode.length &&
-        this.entered.every((v, idx) => v === this.targetCode.at(idx))
-      ) {
-        this.solved = true;
+      // Track sequential progress cleanly: reset if wrong note pressed
+      const expected = this.targetCode.at(this.entered.length);
+      if (best.id === expected) {
+        this.entered.push(best.id);
+        if (this.entered.length === this.targetCode.length) this.solved = true;
+      } else {
+        this.entered = best.id === this.targetCode.at(0) ? Array.of(best.id) : [];
       }
     }
-    return { chime: best, solved: this.solved, progress: this.entered.length };
+    return { chime: best, solved: this.solved, step: this.entered.length };
   }
 }

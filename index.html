@@ -42,8 +42,9 @@
     <button id="gate-btn" class="accent">🚪 Gate</button>
     <button id="narrate-btn">🎙️ Narrate</button>
     <button id="audio-btn">🎻 Audio</button>
+    <button id="song-btn" class="accent">🎵 Next Song</button>
     <select id="track-select">
-      <option value="AUTO">🎵 OST: Auto (District)</option>
+      <option value="AUTO">OST: Auto (District)</option>
       <option value="HARBOR">I. Blackwater Mist</option>
       <option value="ORGAN">II. Chapel Pipe Organ</option>
       <option value="CALLIOPE">III. Pier Calliope Waltz</option>
@@ -207,7 +208,9 @@
       const hit = canopy.ringNearestChime(world.player.x);
       if (hit) {
         sound.playChime(hit.chime.hz, true);
-        const msg = hit.solved ? 'CHIME LOCK UNSEALED! The Manor Gate at 1820m is open!' : 'Struck ' + hit.chime.note + ' (Code: Eb4 -> A4 -> D4).';
+        const msg = hit.solved
+          ? "CHIME SEAL UNLOCKED! All 3 Journey bells harmonized—Manor Gate (1820m) is open!"
+          : "Struck Bell #" + hit.chime.num + " [" + hit.chime.name + " / " + hit.chime.note + "] (" + hit.step + "/3 — Code: #2 Crimson -> #4 Gold -> #1 Azure)";
         logBar.textContent = msg;
         if (hit.solved) chronicle.addEvent(msg);
       } else {
@@ -271,6 +274,7 @@
       canopy.step(tick, px, world.player.y);
       fluidFog.step(px, world.player.y, world.cameraX, tick);
       sheaf.stepLocalNeighborhood(px);
+      sound.setChimeZone(px >= 990 && px <= 1230 && !arena.active);
       sound.updateTension(world.sanityQ16, arena.active, arena.slowMo);
 
       fb.renderWorld(world, { canopy, arena, hasTuningFork: eco.items.has('TUNING_FORK') }, tick);

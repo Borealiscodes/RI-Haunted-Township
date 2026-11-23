@@ -226,11 +226,19 @@ export class TownshipFramebuffer {
 
     for (const ch of PENTATONIC_CHIMES) {
       const sx = ch.x - camX;
-      if (sx < -20 || sx > FB_WIDTH + 20) continue;
+      if (sx < -24 || sx > FB_WIDTH + 24) continue;
       const sway = ((q16Sin(((tick + ch.id * 11) * 2600) % Q16_TAU) * 3) >> 16);
-      const col = extra.canopy.solved ? (B_PINE + 28) : (B_AMBER + 28);
+      const matched = extra.canopy.solved || extra.canopy.entered.includes(ch.id);
       this.drawLine(sx, 86, sx + sway, 134, B_IVORY + 24);
-      this.fillRect(sx + sway - 3, 134, sx + sway + 3, 148, col);
+      this.fillRect(sx + sway - 4, 134, sx + sway + 4, 148, ch.bank + (matched ? 30 : 22));
+      this.drawRectOutline(sx + sway - 4, 134, sx + sway + 4, 148, B_IVORY + 30);
+      if (matched) this.fillCircle(sx + sway, 126, 3, B_AMBER + 31);
+    }
+    for (const rip of extra.canopy.ripples) {
+      const rx = (rip.x - camX) | 0;
+      if (rx >= -40 && rx <= FB_WIDTH + 40) {
+        this.drawCircleOutline(rx, rip.y, rip.r | 0, rip.bank + 28, 18);
+      }
     }
 
     for (const fac of Object.values(FACTIONS)) {
