@@ -1,82 +1,61 @@
 import { Q16_ONE } from '../core/q16.js';
 
-// Symphonic Chamber Strings (3-voice chorus swell) + Subtle Brushed Snare Pulse + Sparse Rosewood Marimba
+// Whisper-quiet, non-stacking chamber ambience + subtle brushed snare pulse + sparse marimba drops
 const TRACKS = {
   HARBOR: {
-    name: 'I. Blackwater Strings & Tide',
-    stepMs: 220, // ~68 BPM 16th-note / 8th-note chamber pulse
-    pulse: Array.of(1,0,0,0, 2,0,0,0, 1,0,0,0, 2,0,1,0), // 1 = soft sub-pulse, 2 = brushed snare
-    chords: [
-      [146.83, 174.61, 220.00], // Dm
-      [116.54, 174.61, 233.08], // BbMaj7
-      [98.00,  146.83, 196.00], // Gm
-      [110.00, 164.81, 220.00]  // Asus4
-    ],
-    // Lyrical chamber melody (played with slow 140ms bowed string envelope + sparse marimba drops)
-    stringsLead: [
+    name: 'I. Blackwater Mist (Quiet Strings & Snare)',
+    stepMs: 240,
+    pulse: Array.of(1,0,0,0, 2,0,0,0, 1,0,0,0, 2,0,0,0), // 1 = soft sub-pulse, 2 = soft brushed snare
+    roots: [146.83, 116.54, 98.00, 110.00], // D3 -> Bb2 -> G2 -> A2
+    lead: [
       440.00, 0, 0, 0, 349.23, 0, 0, 0,  392.00, 0, 0, 0, 329.63, 0, 0, 0,
-      349.23, 0, 0, 0, 440.00, 0, 0, 0,  466.16, 0, 0, 0, 440.00, 0, 392.00, 0
+      349.23, 0, 0, 0, 440.00, 0, 0, 0,  392.00, 0, 0, 0, 293.66, 0, 0, 0
     ],
     marimba: [
-      0, 0, 293.66, 0, 0, 0, 0, 0,  0, 0, 349.23, 0, 0, 0, 293.66, 0,
-      0, 0, 0, 0, 0, 0, 392.00, 0,  0, 0, 0, 0, 349.23, 0, 293.66, 0
+      0, 0, 293.66, 0, 0, 0, 0, 0,  0, 0, 349.23, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 392.00, 0,  0, 0, 0, 0, 0, 0, 293.66, 0
     ]
   },
   CANOPY: {
-    name: 'II. Belfry Nocturne (Strings & Chimes)',
-    stepMs: 240,
-    pulse: Array.of(1,0,0,0, 0,0,0,0, 2,0,0,0, 0,0,0,0), // Minimal nocturnal breath
-    chords: [
-      [146.83, 220.00, 261.63],
-      [130.81, 196.00, 246.94],
-      [116.54, 174.61, 220.00],
-      [146.83, 220.00, 261.63]
-    ],
-    stringsLead: [
+    name: 'II. Belfry Nocturne (Minimal)',
+    stepMs: 260,
+    pulse: Array.of(1,0,0,0, 0,0,0,0, 2,0,0,0, 0,0,0,0),
+    roots: [146.83, 130.81, 116.54, 146.83],
+    lead: [
       523.25, 0, 0, 0, 440.00, 0, 0, 0,  392.00, 0, 0, 0, 349.23, 0, 0, 0,
       392.00, 0, 0, 0, 440.00, 0, 0, 0,  329.63, 0, 0, 0, 293.66, 0, 0, 0
     ],
     marimba: [
-      0, 0, 440.00, 0, 0, 0, 392.00, 0,  0, 0, 0, 0, 0, 0, 293.66, 0,
-      0, 0, 0, 0, 0, 0, 440.00, 0,  0, 0, 392.00, 0, 0, 0, 293.66, 0
+      0, 0, 440.00, 0, 0, 0, 0, 0,  0, 0, 392.00, 0, 0, 0, 0, 0,
+      0, 0, 0, 0, 0, 0, 440.00, 0,  0, 0, 0, 0, 0, 0, 293.66, 0
     ]
   },
   GUILD: {
-    name: 'III. Guild Intrigue (Pulsing Snare & Strings)',
-    stepMs: 185,
-    pulse: Array.of(1,0,0,0, 2,0,0,2, 1,0,0,0, 2,0,1,0), // Subtle syncopated brushed snare pulse
-    chords: [
-      [146.83, 174.61, 220.00],
-      [174.61, 220.00, 261.63],
-      [130.81, 164.81, 196.00],
-      [98.00,  146.83, 196.00]
-    ],
-    stringsLead: [
+    name: 'III. Parlor Pulse (Brushed Snare)',
+    stepMs: 200,
+    pulse: Array.of(1,0,0,0, 2,0,0,2, 1,0,0,0, 2,0,0,0),
+    roots: [146.83, 174.61, 130.81, 98.00],
+    lead: [
       440.00, 0, 0, 0, 523.25, 0, 0, 0,  440.00, 0, 0, 0, 392.00, 0, 0, 0,
       466.16, 0, 0, 0, 440.00, 0, 0, 0,  392.00, 0, 0, 0, 349.23, 0, 0, 0
     ],
     marimba: [
-      0, 0, 587.33, 0, 0, 0, 440.00, 0,  0, 0, 392.00, 0, 0, 0, 349.23, 0,
-      0, 0, 466.16, 0, 0, 0, 392.00, 0,  0, 0, 349.23, 0, 293.66, 0, 0, 0
+      0, 0, 587.33, 0, 0, 0, 0, 0,  0, 0, 392.00, 0, 0, 0, 0, 0,
+      0, 0, 466.16, 0, 0, 0, 0, 0,  0, 0, 349.23, 0, 293.66, 0, 0, 0
     ]
   },
   DANMAKU: {
-    name: 'IV. Midnight Reckoning (Symphonic Tension)',
-    stepMs: 150,
-    pulse: Array.of(1,0,2,0, 2,0,1,0, 1,0,2,0, 2,0,1,2),
-    chords: [
-      [146.83, 174.61, 220.00],
-      [116.54, 174.61, 233.08],
-      [98.00,  146.83, 196.00],
-      [110.00, 138.59, 164.81]
-    ],
-    stringsLead: [
+    name: 'IV. Midnight Reckoning (Focused)',
+    stepMs: 165,
+    pulse: Array.of(1,0,2,0, 2,0,1,0, 1,0,2,0, 2,0,1,0),
+    roots: [146.83, 116.54, 98.00, 110.00],
+    lead: [
       587.33, 0, 0, 0, 523.25, 0, 0, 0,  466.16, 0, 0, 0, 440.00, 0, 0, 0,
       392.00, 0, 0, 0, 440.00, 0, 0, 0,  349.23, 0, 0, 0, 293.66, 0, 0, 0
     ],
     marimba: [
-      0, 440.00, 0, 523.25, 0, 440.00, 0, 392.00,  0, 349.23, 0, 392.00, 0, 440.00, 0, 0,
-      0, 392.00, 0, 349.23, 0, 329.63, 0, 293.66,  0, 329.63, 0, 349.23, 0, 293.66, 0, 0
+      0, 440.00, 0, 0, 0, 440.00, 0, 0,  0, 349.23, 0, 0, 0, 440.00, 0, 0,
+      0, 392.00, 0, 0, 0, 329.63, 0, 0,  0, 329.63, 0, 0, 0, 293.66, 0, 0
     ]
   }
 };
@@ -85,7 +64,7 @@ export class TownshipSoundscape {
   constructor() {
     this.ctx = null;
     this.master = null;
-    this.stringFilter = null;
+    this.warmFilter = null;
     this.noiseBuf = null;
     this.timer = null;
     this.step = 0;
@@ -101,28 +80,28 @@ export class TownshipSoundscape {
     const Ctor = window.AudioContext || window.webkitAudioContext;
     this.ctx = new Ctor();
 
+    // Gentle, non-overpowering master ceiling (0.10) — zero wall-of-sound stacking
     this.master = this.ctx.createGain();
-    this.master.gain.value = 0.24;
+    this.master.gain.value = 0.10;
 
-    // Warm symphonic hall lowpass filter (520 Hz) — zero Casio buzz
-    this.stringFilter = this.ctx.createBiquadFilter();
-    this.stringFilter.type = 'lowpass';
-    this.stringFilter.frequency.value = 520;
-    this.stringFilter.Q.value = 0.8;
+    this.warmFilter = this.ctx.createBiquadFilter();
+    this.warmFilter.type = 'lowpass';
+    this.warmFilter.frequency.value = 440;
+    this.warmFilter.Q.value = 0.5;
 
-    const delay = this.ctx.createDelay(1.2);
-    delay.delayTime.value = 0.38;
+    const delay = this.ctx.createDelay(1.0);
+    delay.delayTime.value = 0.32;
     const fb = this.ctx.createGain();
-    fb.gain.value = 0.32;
+    fb.gain.value = 0.16; // Minimal feedback so notes never pile up
     delay.connect(fb);
     fb.connect(delay);
 
-    this.stringFilter.connect(this.master);
+    this.warmFilter.connect(this.master);
     delay.connect(this.master);
     this.master.connect(this.ctx.destination);
-    this.hallBus = delay;
+    this.roomBus = delay;
 
-    const len = this.ctx.sampleRate * 0.14;
+    const len = this.ctx.sampleRate * 0.12;
     this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const data = this.noiseBuf.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
@@ -152,91 +131,68 @@ export class TownshipSoundscape {
     return this.selectTrack(trackKey, false);
   }
 
-  /** Lush 3-Voice Chorus Symphonic String Swell (eliminates toy-keyboard attack) */
-  _playSymphonicString(hz, now, peak = 0.042, dur = 2.1, attack = 0.24) {
-    for (const detuneCents of [-7, 0, 7]) {
-      const osc = this.ctx.createOscillator();
-      const env = this.ctx.createGain();
-      osc.type = detuneCents === 0 ? 'sawtooth' : 'triangle';
-      osc.frequency.setValueAtTime(hz, now);
-      osc.detune.setValueAtTime(detuneCents, now);
+  /** Single-voice warm sine/triangle chamber pad note (zero multi-oscillator clipping) */
+  _playSoftChamberNote(hz, now, peak = 0.12, dur = 1.4, attack = 0.18) {
+    const osc = this.ctx.createOscillator();
+    const env = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(hz, now);
 
-      env.gain.setValueAtTime(0.0008, now);
-      env.gain.exponentialRampToValueAtTime(peak, now + attack);
-      env.gain.exponentialRampToValueAtTime(0.0006, now + dur);
+    env.gain.setValueAtTime(0.001, now);
+    env.gain.exponentialRampToValueAtTime(peak, now + attack);
+    env.gain.exponentialRampToValueAtTime(0.0006, now + dur);
 
-      osc.connect(env);
-      env.connect(this.stringFilter);
-      env.connect(this.hallBus);
-      osc.start(now);
-      osc.stop(now + dur + 0.05);
-    }
+    osc.connect(env);
+    env.connect(this.warmFilter);
+    osc.start(now);
+    osc.stop(now + dur + 0.04);
   }
 
-  /** Subtle Brushed Snare Pulse */
   _playBrushedSnare(now) {
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuf;
     const bp = this.ctx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.value = 1550;
-    bp.Q.value = 1.1;
-
+    bp.frequency.value = 1450;
     const env = this.ctx.createGain();
     env.gain.setValueAtTime(0.001, now);
-    env.gain.exponentialRampToValueAtTime(0.075, now + 0.015);
-    env.gain.exponentialRampToValueAtTime(0.0008, now + 0.12);
-
+    env.gain.exponentialRampToValueAtTime(0.11, now + 0.015);
+    env.gain.exponentialRampToValueAtTime(0.0008, now + 0.11);
     src.connect(bp);
     bp.connect(env);
     env.connect(this.master);
     src.start(now);
   }
 
-  /** Deep Muted Sub-Pulse */
   _playSubPulse(now) {
     const osc = this.ctx.createOscillator();
     const env = this.ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(78, now);
-    osc.frequency.exponentialRampToValueAtTime(38, now + 0.15);
-    env.gain.setValueAtTime(0.18, now);
-    env.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+    osc.frequency.setValueAtTime(76, now);
+    osc.frequency.exponentialRampToValueAtTime(38, now + 0.14);
+    env.gain.setValueAtTime(0.24, now);
+    env.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
     osc.connect(env);
     env.connect(this.master);
     osc.start(now);
     osc.stop(now + 0.18);
   }
 
-  /** Sparse Rosewood Marimba Drop (pure 1x + 4x harmonic) */
   _playMarimbaDrop(hz, now) {
-    const fund = this.ctx.createOscillator();
-    const harm = this.ctx.createOscillator();
+    const osc = this.ctx.createOscillator();
     const env = this.ctx.createGain();
-    const harmGain = this.ctx.createGain();
-
-    fund.type = 'sine';
-    fund.frequency.setValueAtTime(hz, now);
-    harm.type = 'sine';
-    harm.frequency.setValueAtTime(hz * 4.0, now);
-
-    harmGain.gain.setValueAtTime(0.08, now);
-    harmGain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(hz, now);
 
     env.gain.setValueAtTime(0.001, now);
-    env.gain.exponentialRampToValueAtTime(0.075, now + 0.018);
-    env.gain.exponentialRampToValueAtTime(0.0006, now + 0.42);
+    env.gain.exponentialRampToValueAtTime(0.14, now + 0.015);
+    env.gain.exponentialRampToValueAtTime(0.0006, now + 0.36);
 
-    fund.connect(env);
-    harm.connect(harmGain);
-    harmGain.connect(env);
-    env.connect(this.stringFilter);
-    env.connect(this.hallBus);
-
-    fund.start(now);
-    harm.start(now);
-    fund.stop(now + 0.45);
-    harm.stop(now + 0.45);
+    osc.connect(env);
+    env.connect(this.warmFilter);
+    env.connect(this.roomBus);
+    osc.start(now);
+    osc.stop(now + 0.38);
   }
 
   playChime(hz) {
@@ -251,33 +207,32 @@ export class TownshipSoundscape {
     const i16 = s & 15;
     const i32 = s & 31;
     const bar = (i32 >> 3) & 3;
-    const chord = trk.chords[bar];
+    const root = trk.roots[bar];
     const now = this.ctx.currentTime;
 
-    // 1. Lush Symphonic String Chord Swell every bar
+    // 1. Clean 2-note root + fifth chamber bed (never stacks > 2 voices!)
     if ((s & 7) === 0) {
-      this._playSymphonicString(chord[0] * 0.5, now, 0.048, 2.4, 0.28);
-      this._playSymphonicString(chord[1], now, 0.026, 2.2, 0.30);
-      this._playSymphonicString(chord[2], now, 0.026, 2.2, 0.30);
+      this._playSoftChamberNote(root, now, 0.14, 1.75, 0.22);
+      this._playSoftChamberNote(root * 1.498, now, 0.08, 1.75, 0.26);
     }
 
-    // 2. Bowed String Melody Swell
-    const sHz = trk.stringsLead[i32];
-    if (sHz > 0) this._playSymphonicString(sHz, now, 0.036, 1.35, 0.16);
+    // 2. Gentle chamber melody note
+    const lHz = trk.lead[i32];
+    if (lHz > 0) this._playSoftChamberNote(lHz, now, 0.09, 1.1, 0.14);
 
-    // 3. Subtle Brushed Snare & Sub-Bass Pulse
+    // 3. Subtle brushed snare & sub-bass pulse
     const pType = trk.pulse[i16];
     if (pType === 1) this._playSubPulse(now);
     if (pType === 2) this._playBrushedSnare(now);
 
-    // 4. Sparse Rosewood Marimba Drops
+    // 4. Sparse wooden marimba drops
     const mHz = trk.marimba[i32];
     if (mHz > 0) this._playMarimbaDrop(mHz, now);
   }
 
   updateTension(sanityQ16 = Q16_ONE, inBulletHell = false, slowMo = false) {
-    if (!this.ctx || !this.stringFilter) return;
-    const cutoff = slowMo ? 360 : (inBulletHell ? 740 : 520);
-    this.stringFilter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, 0.2);
+    if (!this.ctx || !this.warmFilter) return;
+    const cutoff = slowMo ? 320 : (inBulletHell ? 620 : 440);
+    this.warmFilter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, 0.2);
   }
 }
