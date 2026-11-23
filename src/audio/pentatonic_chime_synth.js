@@ -1,34 +1,34 @@
 import { Q16_ONE } from '../core/q16.js';
 
+// Strictly consonant D Natural Minor frequencies (D, E, F, G, A, Bb, C) — zero C# tritones or clashing partials
 const TRACKS = {
   HARBOR: {
     name: 'I. Blackwater Mist (Harp & Choir)',
-    stepMs: 250,
+    stepMs: 260,
     style: 'HARP',
     roots: [73.42, 58.27, 49.00, 55.00], // D2 -> Bb1 -> G1 -> A1
-    // Expressive broken-chord harp arpeggios across 4 bars (32 steps)
     arp: [
       293.66, 349.23, 440.00, 523.25, 440.00, 349.23, 329.63, 293.66,
       233.08, 293.66, 349.23, 466.16, 440.00, 349.23, 293.66, 233.08,
       196.00, 293.66, 349.23, 392.00, 440.00, 392.00, 349.23, 293.66,
-      220.00, 277.18, 329.63, 440.00, 392.00, 329.63, 277.18, 220.00
+      220.00, 261.63, 329.63, 440.00, 392.00, 329.63, 261.63, 220.00
     ]
   },
   ORGAN: {
     name: 'II. Chapel Pipe Organ (Deep Chorale)',
-    stepMs: 320,
+    stepMs: 340,
     style: 'ORGAN',
     roots: [73.42, 58.27, 49.00, 55.00],
     arp: [
       293.66, 0, 349.23, 0, 440.00, 0, 392.00, 0,
-      349.23, 0, 329.63, 0, 293.66, 0, 277.18, 0,
+      349.23, 0, 329.63, 0, 293.66, 0, 261.63, 0,
       293.66, 0, 440.00, 0, 523.25, 0, 466.16, 0,
       440.00, 0, 392.00, 0, 329.63, 0, 293.66, 0
     ]
   },
   CALLIOPE: {
     name: 'III. Pier Calliope (3/4 Carousel Waltz)',
-    stepMs: 185,
+    stepMs: 190,
     style: 'CALLIOPE',
     waltz: true,
     roots: [146.83, 98.00, 116.54, 110.00],
@@ -39,14 +39,14 @@ const TRACKS = {
   },
   DANMAKU: {
     name: 'IV. Midnight Toccata (Boss Tension)',
-    stepMs: 145,
+    stepMs: 155,
     style: 'ORGAN',
     roots: [73.42, 58.27, 49.00, 55.00],
     arp: [
       587.33, 440.00, 523.25, 440.00, 466.16, 392.00, 440.00, 349.23,
-      392.00, 349.23, 329.63, 293.66, 329.63, 277.18, 293.66, 0,
+      392.00, 349.23, 329.63, 293.66, 329.63, 261.63, 293.66, 0,
       587.33, 659.25, 587.33, 523.25, 466.16, 523.25, 440.00, 392.00,
-      349.23, 392.00, 329.63, 277.18, 293.66, 0, 0, 0
+      349.23, 392.00, 329.63, 261.63, 293.66, 0, 0, 0
     ]
   }
 };
@@ -74,20 +74,20 @@ export class TownshipSoundscape {
     this.ctx = new Ctor();
 
     this.bgmGain = this.ctx.createGain();
-    this.bgmGain.gain.value = 0.14;
+    this.bgmGain.gain.value = 0.13;
 
     this.sfxGain = this.ctx.createGain();
     this.sfxGain.gain.value = 0.25;
 
     this.warmFilter = this.ctx.createBiquadFilter();
     this.warmFilter.type = 'lowpass';
-    this.warmFilter.frequency.value = 780;
-    this.warmFilter.Q.value = 0.6;
+    this.warmFilter.frequency.value = 720;
+    this.warmFilter.Q.value = 0.5;
 
     const delay = this.ctx.createDelay(1.2);
-    delay.delayTime.value = 0.36;
+    delay.delayTime.value = 0.34;
     const fb = this.ctx.createGain();
-    fb.gain.value = 0.24;
+    fb.gain.value = 0.18;
     delay.connect(fb);
     fb.connect(delay);
 
@@ -99,7 +99,7 @@ export class TownshipSoundscape {
     const chimeDelay = this.ctx.createDelay(1.2);
     chimeDelay.delayTime.value = 0.34;
     const cFb = this.ctx.createGain();
-    cFb.gain.value = 0.22;
+    cFb.gain.value = 0.20;
     chimeDelay.connect(cFb);
     cFb.connect(chimeDelay);
     chimeDelay.connect(this.sfxGain);
@@ -138,37 +138,36 @@ export class TownshipSoundscape {
 
   setChimeZone(inCanopy) {
     if (!this.ctx || !this.bgmGain) return;
-    this.bgmGain.gain.setTargetAtTime(inCanopy ? 0.015 : 0.14, this.ctx.currentTime, 0.25);
+    this.bgmGain.gain.setTargetAtTime(inCanopy ? 0.015 : 0.13, this.ctx.currentTime, 0.25);
   }
 
   playChime(hz) {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
-    for (const p of [{ mult: 1.0, amp: 0.16, dur: 1.9 }, { mult: 2.0, amp: 0.07, dur: 1.3 }, { mult: 3.0, amp: 0.03, dur: 0.8 }]) {
+    for (const p of [{ mult: 1.0, amp: 0.16, dur: 1.8 }, { mult: 2.0, amp: 0.07, dur: 1.2 }]) {
       const osc = this.ctx.createOscillator();
       const env = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(hz * p.mult, now);
       env.gain.setValueAtTime(0.0008, now);
-      env.gain.exponentialRampToValueAtTime(p.amp, now + 0.012);
+      env.gain.exponentialRampToValueAtTime(p.amp, now + 0.014);
       env.gain.exponentialRampToValueAtTime(0.0005, now + p.dur);
       osc.connect(env);
       env.connect(this.sfxGain);
       env.connect(this.chimeEcho);
       osc.start(now);
-      osc.stop(now + p.dur + 0.05);
+      osc.stop(now + p.dur + 0.04);
     }
   }
 
-  /** Plucked Acoustic Harp Note (warm 1x + 2x string bloom) */
-  _playHarpPluck(hz, now, peak = 0.09, dur = 1.1) {
-    for (const st of [{ mult: 1.0, amp: peak }, { mult: 2.0, amp: peak * 0.35 }]) {
+  _playHarpPluck(hz, now, peak = 0.085, dur = 1.05) {
+    for (const st of [{ mult: 1.0, amp: peak }, { mult: 2.0, amp: peak * 0.30 }]) {
       const osc = this.ctx.createOscillator();
       const env = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(hz * st.mult, now);
       env.gain.setValueAtTime(0.0008, now);
-      env.gain.exponentialRampToValueAtTime(st.amp, now + 0.018);
+      env.gain.exponentialRampToValueAtTime(st.amp, now + 0.02);
       env.gain.exponentialRampToValueAtTime(0.0005, now + dur);
       osc.connect(env);
       env.connect(this.warmFilter);
@@ -178,14 +177,15 @@ export class TownshipSoundscape {
     }
   }
 
-  _playPipeOrgan(hz, now, peak = 0.09, dur = 1.6) {
-    for (const st of [{ mult: 1.0, amp: peak }, { mult: 2.0, amp: peak * 0.45 }, { mult: 3.0, amp: peak * 0.16 }]) {
+  /** Pure 8' (1x) + 4' (2x) Cathedral Pipe Organ (eliminates 3x fifth-harmonic dissonance) */
+  _playPipeOrgan(hz, now, peak = 0.09, dur = 1.5) {
+    for (const st of [{ mult: 1.0, amp: peak }, { mult: 2.0, amp: peak * 0.42 }]) {
       const osc = this.ctx.createOscillator();
       const env = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(hz * st.mult, now);
       env.gain.setValueAtTime(0.0008, now);
-      env.gain.exponentialRampToValueAtTime(st.amp, now + 0.08);
+      env.gain.exponentialRampToValueAtTime(st.amp, now + 0.09);
       env.gain.exponentialRampToValueAtTime(0.0006, now + dur);
       osc.connect(env);
       env.connect(this.warmFilter);
@@ -194,15 +194,16 @@ export class TownshipSoundscape {
     }
   }
 
-  _playPierCalliope(hz, now, peak = 0.075, dur = 0.55) {
-    for (const cents of [-6, 6]) {
+  /** Pure unison + subtle 3-cent chorus steam calliope */
+  _playPierCalliope(hz, now, peak = 0.07, dur = 0.52) {
+    for (const cents of [-3, 3]) {
       const osc = this.ctx.createOscillator();
       const env = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(hz, now);
       osc.detune.setValueAtTime(cents, now);
       env.gain.setValueAtTime(0.0008, now);
-      env.gain.exponentialRampToValueAtTime(peak, now + 0.035);
+      env.gain.exponentialRampToValueAtTime(peak, now + 0.04);
       env.gain.exponentialRampToValueAtTime(0.0006, now + dur);
       osc.connect(env);
       env.connect(this.warmFilter);
@@ -222,9 +223,9 @@ export class TownshipSoundscape {
       const bar = (i24 / 6) | 0;
       const beat = i24 % 6;
       const root = trk.roots[bar];
-      if (beat === 0) this._playPierCalliope(root, now, 0.08, 0.45);
-      if (beat === 2 || beat === 4) this._playPierCalliope(root * 1.498, now, 0.05, 0.28);
-      if (trk.arp[i24] > 0) this._playPierCalliope(trk.arp[i24], now, 0.075, 0.55);
+      if (beat === 0) this._playPierCalliope(root, now, 0.075, 0.45);
+      if (beat === 2 || beat === 4) this._playPierCalliope(root * 2.0, now, 0.045, 0.28);
+      if (trk.arp[i24] > 0) this._playPierCalliope(trk.arp[i24], now, 0.07, 0.52);
       return;
     }
 
@@ -234,24 +235,24 @@ export class TownshipSoundscape {
 
     if ((s & 7) === 0) {
       if (trk.style === 'ORGAN') {
-        this._playPipeOrgan(root, now, 0.10, 1.9);
-        this._playPipeOrgan(root * 1.498, now, 0.055, 1.9);
+        this._playPipeOrgan(root, now, 0.095, 1.85);
+        this._playPipeOrgan(root * 2.0, now, 0.055, 1.85);
       } else {
-        this._playHarpPluck(root * 2.0, now, 0.11, 2.0);
-        this._playHarpPluck(root * 2.996, now, 0.06, 2.0);
+        this._playHarpPluck(root * 2.0, now, 0.10, 1.9);
+        this._playHarpPluck(root * 4.0, now, 0.045, 1.9);
       }
     }
 
     const nHz = trk.arp[i32];
     if (nHz > 0) {
-      if (trk.style === 'ORGAN') this._playPipeOrgan(nHz, now, 0.085, 1.0);
-      else this._playHarpPluck(nHz, now, 0.085, 1.15);
+      if (trk.style === 'ORGAN') this._playPipeOrgan(nHz, now, 0.08, 0.95);
+      else this._playHarpPluck(nHz, now, 0.08, 1.1);
     }
   }
 
   updateTension(sanityQ16 = Q16_ONE, inBulletHell = false, slowMo = false) {
     if (!this.ctx || !this.warmFilter) return;
-    const cutoff = slowMo ? 420 : (inBulletHell ? 920 : 780);
+    const cutoff = slowMo ? 400 : (inBulletHell ? 860 : 720);
     this.warmFilter.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, 0.2);
   }
 }
