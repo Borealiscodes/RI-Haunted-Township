@@ -243,18 +243,41 @@ export class TownshipFramebuffer {
 
     for (const fac of Object.values(FACTIONS)) {
       const sx = fac.x - camX;
-      if (sx < -30 || sx > FB_WIDTH + 30) continue;
-      this.fillShadedRect(sx - 14, 182, sx + 14, 217, B_WOOD, 22, 10);
-      this.fillTri({ x: sx, y: 164 }, { x: sx - 18, y: 182 }, { x: sx + 18, y: 182 }, B_CRIMSON + 24);
+      if (sx < -40 || sx > FB_WIDTH + 40) continue;
+      // Shaded Guild Outpost Canopy
+      this.fillShadedRect(sx - 22, 182, sx + 2, 217, B_WOOD, 22, 10);
+      this.fillTri({ x: sx - 10, y: 164 }, { x: sx - 26, y: 182 }, { x: sx + 6, y: 182 }, fac.bank + 22);
+
+      // Distinct Visible Faction Envoy NPC standing at sx + 12
+      const nx = sx + 12;
+      const status = extra.npcStatus ? extra.npcStatus[fac.id] : "PEACEFUL";
+      if (status !== "DEFEATED") {
+        // Robed silhouette + head + guild staff/relic
+        this.fillTri({ x: nx, y: 192 }, { x: nx - 8, y: 217 }, { x: nx + 8, y: 217 }, fac.bank + 24);
+        this.fillCircle(nx, 187, 4, B_IVORY + 26);
+        this.drawLine(nx - 6, 182, nx - 6, 217, B_AMBER + 28);
+        this.fillCircle(nx - 6, 180, 2, fac.bank + 30);
+        // Floating [!] interaction diamond when Evelyn approaches within 58m
+        if (Math.abs(p.x - fac.x) <= 58) {
+          const bob = ((q16Sin((tick * 4200) % Q16_TAU) * 2) >> 16);
+          this.drawCircleOutline(nx, 170 + bob, 5, B_AMBER + 31, 8);
+          this.drawLine(nx, 167 + bob, nx, 171 + bob, B_AMBER + 31);
+        }
+      } else {
+        // Fallen cloak marker if bypassed by combat
+        this.fillRect(nx - 9, 212, nx + 9, 217, fac.bank + 12);
+      }
     }
 
+    // Ethereal Swirling Soul Wisps (replaces generic amber)
     for (const node of world.nodes) {
       if (node.collected) continue;
       const sx = node.x - camX;
       if (sx < -20 || sx > FB_WIDTH + 20) continue;
-      const bob = ((q16Sin((tick * 3400) % Q16_TAU) * 2) >> 16);
-      this.fillCircle(sx, node.y + bob, 4, B_AMBER + 30);
-      this.drawCircleOutline(sx, node.y + bob, 6, B_AMBER + 20, 10);
+      const bob = ((q16Sin((tick * 3400) % Q16_TAU) * 3) >> 16);
+      this.fillCircle(sx, node.y + bob, 3, B_ASTRAL + 31);
+      this.drawCircleOutline(sx, node.y + bob, 6, B_SEA + 26, 10);
+      this.drawLine(sx, node.y + bob + 3, sx - 2, node.y + bob + 9, B_ASTRAL + 22);
     }
 
     // 7. Patrolling Watchers with Volumetric Searchlight Frustum Cone

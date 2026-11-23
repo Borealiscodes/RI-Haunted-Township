@@ -1,5 +1,6 @@
 import { Q16_ONE, Q16_TAU, q16Sin, q16Clamp } from '../core/q16.js';
 import { ALIGN } from '../core/spatial_sheaf.js';
+import { FACTIONS } from '../economy/faction_attache.js';
 
 export class TownshipWorld {
   constructor() {
@@ -99,6 +100,15 @@ export class TownshipWorld {
           return { event: 'SLAIN', foe: f };
         }
         return { event: 'HIT', foe: f };
+      }
+    }
+
+    // Combat bypass option against Faction Envoys (Brother Caleb, Sister Mara, Archivist Vane)
+    for (const fac of Object.values(FACTIONS)) {
+      const dx = fac.x - p.x;
+      const inFront = (p.facing > 0 && dx >= -10 && dx <= reach) || (p.facing < 0 && dx <= 10 && dx >= -reach);
+      if (inFront && Math.abs(fac.y - p.y) < 34) {
+        return { event: "ATTACK_NPC", faction: fac };
       }
     }
     return { event: 'SWING' };

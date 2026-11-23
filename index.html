@@ -166,11 +166,28 @@
         arena.startEncounter(res.foe.name + ' (Stage II: Astral Seal)', res.foe.align, 2);
         logBar.textContent = 'PHASE SHIFT! ' + res.foe.name + ' armor shattered—now dodge & parry its Bullet-Hell Spell Card!';
       } else if (res.event === 'SLAIN') {
-        eco.amberShards++;
+        eco.souls++;
         sound.playChime(587.33, true);
-        const msg = 'Slain ' + res.foe.name + ' in melee combat! (+1 Amber Shard)';
+        const msg = 'Slain ' + res.foe.name + ' in melee combat! (+1 Soul Wisp)';
         logBar.textContent = msg;
         chronicle.addEvent(msg);
+      } else if (res.event === "ATTACK_NPC") {
+        const fac = res.faction;
+        if (eco.items.has(fac.item)) {
+          logBar.textContent = fac.npcName + " has nothing left to take.";
+        } else if (fac.id === "ARCHIVE_REMNANT") {
+          arena.startEncounter(fac.npcName + " (Astral Duel)", 3, 2);
+          arena.rewardFactionId = fac.id;
+          logBar.textContent = "DUEL! Archivist Vane summons an Astral Spell Card—parry to win the Bronze Gladius!";
+        } else {
+          const loot = eco.bypassTraderByCombat(fac.id);
+          if (loot) {
+            world.sanityQ16 = q16Clamp(world.sanityQ16 - 9830, 0, Q16_ONE);
+            sound.playChime(587.33);
+            logBar.textContent = loot.msg;
+            chronicle.addEvent(loot.msg);
+          }
+        }
       } else if (res.event === 'HIT') {
         logBar.textContent = 'Struck ' + res.foe.name + '! (' + res.foe.hp + ' HP left)';
       }
@@ -182,12 +199,12 @@
       const p = world.player;
       for (const n of world.nodes) {
         if (!n.collected && Math.hypot(p.x - n.x, (p.y + 16) - n.y) < 36) {
-          n.collected = true; eco.amberShards++; sound.playChime(466.16, true);
-          logBar.textContent = 'Gathered Amber Resin Shard (+1 Shard).';
+          n.collected = true; eco.souls++; sound.playChime(466.16, true);
+          logBar.textContent = 'Harvested Wandering Soul Wisp (+1 Soul Wisp).';
           return;
         }
       }
-      logBar.textContent = 'No Amber Resin within reach. Jump onto upper roofs & piers!';
+      logBar.textContent = 'No Soul Wisps within reach. Search roofs, piers, or banish Watchers!';
     });
 
     document.getElementById('trade-btn').addEventListener('click', () => {
@@ -240,8 +257,13 @@
       const res = arena.parryBurst();
       if (res.event === 'BANISHED') {
         for (const f of world.foes) if (f.isBoss && f.danmakuTriggered) f.alive = false;
-        sound.playChime(587.33, true); eco.amberShards++;
-        const msg = 'BANISHED ' + arena.bossName + '! (+1 Amber Shard)';
+        if (arena.rewardFactionId) {
+          const loot = eco.bypassTraderByCombat(arena.rewardFactionId);
+          arena.rewardFactionId = null;
+          if (loot) { logBar.textContent = loot.msg; chronicle.addEvent(loot.msg); }
+        }
+        sound.playChime(587.33, true); eco.souls++;
+        const msg = 'BANISHED ' + arena.bossName + '! (+1 Soul Wisp)';
         logBar.textContent = msg; chronicle.addEvent(msg);
       } else if (res.event === 'HIT') {
         sound.playChime(440.0, true); logBar.textContent = 'Parried bolt! (' + res.hp + ' HP left)';
@@ -265,6 +287,13 @@
 
       const px = world.player.x;
       const zoneKey = px < 480 ? 'HARBOR' : px < 960 ? 'SQUARE' : px < 1440 ? 'CANOPY' : 'MILL';
+            const nearNpc = eco.getNearestNPC(px, 54);
+      if (nearNpc && world.lastGreetedNpc !== nearNpc.id && eco.npcStatus[nearNpc.id] === "PEACEFUL") {
+        world.lastGreetedNpc = nearNpc.id;
+        logBar.textContent = nearNpc.dialogue;
+      } else if (!nearNpc) {
+        world.lastGreetedNpc = null;
+      }
       const newLore = chronicle.recordDistrict(zoneKey);
       if (newLore) { logBar.textContent = newLore; narrate(newLore); }
 
@@ -277,7 +306,7 @@
       sound.setChimeZone(px >= 990 && px <= 1230 && !arena.active);
       sound.updateTension(world.sanityQ16, arena.active, arena.slowMo);
 
-      fb.renderWorld(world, { canopy, arena, hasTuningFork: eco.items.has('TUNING_FORK') }, tick);
+      fb.renderWorld(world, { canopy, arena, hasTuningFork: eco.items.has('TUNING_FORK'), npcStatus: eco.npcStatus }, tick);
       imgU32.set(fb.resolveRGBA32());
       ctx.putImageData(imgData, 0, 0);
 
@@ -286,7 +315,7 @@
       const stealth = world.player.hidden ? ' [HIDDEN IN DOORWAY]' : '';
       hud.textContent =
         'District: ' + zoneNames[zoneKey] + ' (' + px + 'm)' + stealth + ' | OST: ' + trackName + ' | Sanity: ' + ((world.sanityQ16 * 100) >> 16) + '%\n' +
-        'Attaché Case: ' + eco.amberShards + ' Amber Shards | Relics: ' + relics + (arena.active ? ' | Graze: ' + arena.grazeCount + ' | Focus: ' + (arena.focusEnergy | 0) + '%' : '');
+        'Attaché Case: ' + eco.souls + ' Soul Wisps | Relics: ' + relics + (arena.active ? ' | Graze: ' + arena.grazeCount + ' | Focus: ' + (arena.focusEnergy | 0) + '%' : '');
       chronicleList.innerHTML = chronicle.entries.map((e) => '<p style="margin-bottom:4px;">• ' + e + '</p>').join('');
       requestAnimationFrame(frame);
     }
