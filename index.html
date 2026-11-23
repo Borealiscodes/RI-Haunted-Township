@@ -40,7 +40,7 @@
     <button id="trade-btn" class="accent">🤝 Trade</button>
     <button id="chime-btn" class="accent">🔔 Chime</button>
     <button id="gate-btn" class="accent">🚪 Gate</button>
-    <button id="audio-btn">🎻 4-Ch OST</button>
+    <button id="audio-btn">🎻 Legato OST</button>
   </div>
   <div id="arena-controls" class="controls" style="display:none;">
     <button id="a-left">◀</button>
@@ -132,14 +132,13 @@
       if (['ArrowLeft','a','ArrowRight','d'].includes(e.key)) moveX = 0;
       if (['ArrowUp','w','ArrowDown','s'].includes(e.key)) moveY = 0;
     });
-
     function doSlash() {
       unlockAudio();
       const res = world.meleeSlash(eco.items.has('BRONZE_GLADIUS'), eco.combatEnabled());
       sound.playChime(220.0, false);
       if (res.event === 'TRIGGER_DANMAKU') {
         arena.startEncounter(res.foe.name + ' (Stage II: Astral Seal)', res.foe.align, 2);
-        logBar.textContent = 'PHASE SHIFT! ' + res.foe.name + '\'s armor shattered—now dodge & parry its Bullet-Hell Spell Card!';
+        logBar.textContent = 'PHASE SHIFT! ' + res.foe.name + ' armor shattered—now dodge & parry its Bullet-Hell Spell Card!';
       } else if (res.event === 'SLAIN') {
         eco.amberShards++;
         sound.playChime(587.33, true);
@@ -259,217 +258,10 @@
       hud.textContent =
         'District: ' + zoneNames[zoneKey] + ' (' + px + 'm)' + stealth + ' | OST: ' + trackName + ' | Sanity: ' + ((world.sanityQ16 * 100) >> 16) + '%\n' +
         'Attaché Case: ' + eco.amberShards + ' Amber Shards | Relics: ' + relics + (arena.active ? ' | Graze: ' + arena.grazeCount + ' | Focus: ' + (arena.focusEnergy | 0) + '%' : '');
-      
-cat << 'EOF' >> index.html
-  <script type="module">
-    import { Q16_ONE, q16Clamp } from './src/core/q16.js';
-    import { TownshipSpatialSheaf } from './src/core/spatial_sheaf.js';
-    import { TownshipWorld } from './src/world/township_world.js';
-    import { CanopyChimePuzzle } from './src/physics/verlet_canopy.js';
-    import { RadialFluidFog } from './src/physics/radial_fluid_fog.js';
-    import { BulletHellArena } from './src/physics/bullet_hell_arena.js';
-    import { FactionAttacheSystem } from './src/economy/faction_attache.js';
-    import { TownshipFramebuffer, FB_WIDTH, FB_HEIGHT } from './src/render/township_renderer.js';
-    import { TownshipSoundscape } from './src/audio/pentatonic_chime_synth.js';
-    import { TownshipChronicle, OPENING_PROLOGUE } from './src/story/township_chronicle.js';
-
-    const canvas = document.getElementById('screen');
-    const ctx = canvas.getContext('2d');
-    const imgData = ctx.createImageData(FB_WIDTH, FB_HEIGHT);
-    const imgU32 = new Uint32Array(imgData.data.buffer);
-    const logBar = document.getElementById('log-bar');
-    const hud = document.getElementById('hud');
-    const chronicleList = document.getElementById('chronicle-list');
-    const exploreBar = document.getElementById('explore-controls');
-    const arenaBar = document.getElementById('arena-controls');
-
-    const sheaf = new TownshipSpatialSheaf(1920, 120);
-    const world = new TownshipWorld();
-    const canopy = new CanopyChimePuzzle();
-    const fluidFog = new RadialFluidFog();
-    const arena = new BulletHellArena();
-    const eco = new FactionAttacheSystem();
-    const fb = new TownshipFramebuffer();
-    const sound = new TownshipSoundscape();
-    const chronicle = new TownshipChronicle();
-
-    logBar.textContent = OPENING_PROLOGUE;
-    let moveX = 0, moveY = 0, tick = 0, draggingSoul = false;
-
-    function unlockAudio() {
-      sound.start();
-      document.getElementById('audio-btn').textContent = '🎻 OST On';
+      chronicleList.innerHTML = chronicle.entries.map((e) => '<p style="margin-bottom:4px;">• ' + e + '</p>').join('');
+      requestAnimationFrame(frame);
     }
-    document.getElementById('audio-btn').addEventListener('click', unlockAudio);
-    document.getElementById('mode-select').addEventListener('change', (e) => { eco.setMode(e.target.value); logBar.textContent = 'Mode: ' + eco.mode; });
-
-    canvas.addEventListener('pointerdown', (e) => {
-      unlockAudio();
-      if (!arena.active) return;
-      draggingSoul = true;
-      const r = canvas.getBoundingClientRect();
-      arena.setSoulTarget(((e.clientX - r.left) / r.width) * FB_WIDTH, ((e.clientY - r.top) / r.height) * FB_HEIGHT);
-    });
-    canvas.addEventListener('pointermove', (e) => {
-      if (!arena.active || !draggingSoul) return;
-      const r = canvas.getBoundingClientRect();
-      arena.setSoulTarget(((e.clientX - r.left) / r.width) * FB_WIDTH, ((e.clientY - r.top) / r.height) * FB_HEIGHT);
-    });
-
-    const bindHold = (id, dx, dy) => {
-      document.getElementById(id).addEventListener('pointerdown', () => { moveX = dx; moveY = dy; unlockAudio(); });
-    };
-    bindHold('left-btn', -1, 0); bindHold('right-btn', 1, 0);
-    bindHold('a-left', -1, 0); bindHold('a-right', 1, 0);
-    bindHold('a-up', 0, -1); bindHold('a-down', 0, 1);
-    document.getElementById('jump-btn').addEventListener('pointerdown', () => { world.jump(); unlockAudio(); });
-    window.addEventListener('pointerup', () => { moveX = 0; moveY = 0; draggingSoul = false; });
-
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowLeft' || e.key === 'a') moveX = -1;
-      if (e.key === 'ArrowRight' || e.key === 'd') moveX = 1;
-      if (e.key === 'ArrowUp' || e.key === 'w') { moveY = -1; if (!arena.active) world.jump(); }
-      if (e.key === 'ArrowDown' || e.key === 's') moveY = 1;
-      if (e.key === ' ' && !arena.active) world.jump();
-      if (e.key === 'f') doSlash();
-      if (e.key === 'Shift' && arena.active) arena.toggleBulletTime();
-    });
-    window.addEventListener('keyup', (e) => {
-      if (['ArrowLeft','a','ArrowRight','d'].includes(e.key)) moveX = 0;
-      if (['ArrowUp','w','ArrowDown','s'].includes(e.key)) moveY = 0;
-    });
-
-    function doSlash() {
-      unlockAudio();
-      const res = world.meleeSlash(eco.items.has('BRONZE_GLADIUS'), eco.combatEnabled());
-      sound.playChime(220.0, false);
-      if (res.event === 'TRIGGER_DANMAKU') {
-        arena.startEncounter(res.foe.name + ' (Stage II: Astral Seal)', res.foe.align, 2);
-        logBar.textContent = 'PHASE SHIFT! ' + res.foe.name + '\'s armor shattered—now dodge & parry its Bullet-Hell Spell Card!';
-      } else if (res.event === 'SLAIN') {
-        eco.amberShards++;
-        sound.playChime(587.33, true);
-        const msg = 'Slain ' + res.foe.name + ' in melee combat! (+1 Amber Shard)';
-        logBar.textContent = msg;
-        chronicle.addEvent(msg);
-      } else if (res.event === 'HIT') {
-        logBar.textContent = 'Struck ' + res.foe.name + '! (' + res.foe.hp + ' HP left)';
-      }
-    }
-    document.getElementById('slash-btn').addEventListener('click', doSlash);
-
-    document.getElementById('gather-btn').addEventListener('click', () => {
-      unlockAudio();
-      const p = world.player;
-      for (const n of world.nodes) {
-        if (!n.collected && Math.hypot(p.x - n.x, (p.y + 16) - n.y) < 36) {
-          n.collected = true; eco.amberShards++; sound.playChime(466.16, true);
-          logBar.textContent = 'Gathered Amber Resin Shard (+1 Shard).';
-          return;
-        }
-      }
-      logBar.textContent = 'No Amber Resin within reach. Jump onto upper roofs & piers!';
-    });
-
-    document.getElementById('trade-btn').addEventListener('click', () => {
-      unlockAudio();
-      const trade = eco.tradeWithNearestFaction(world.player.x);
-      if (trade) {
-        if (eco.items.has('VITALITY_TINCTURE')) world.sanityQ16 = Q16_ONE;
-        sound.playChime(392.0, true);
-        logBar.textContent = trade.msg;
-        chronicle.addEvent(trade.msg);
-      } else {
-        logBar.textContent = 'Visit Bell-Keepers (340m), Flesh-Harvesters (760m), or Archive Remnant (1460m).';
-      }
-    });
-
-    document.getElementById('chime-btn').addEventListener('click', () => {
-      unlockAudio();
-      const hit = canopy.ringNearestChime(world.player.x);
-      if (hit) {
-        sound.playChime(hit.chime.hz, true);
-        const msg = hit.solved ? 'CHIME LOCK UNSEALED! The Manor Gate at 1820m is open!' : 'Struck ' + hit.chime.note + ' (Code: Eb4 -> A4 -> D4).';
-        logBar.textContent = msg;
-        if (hit.solved) chronicle.addEvent(msg);
-      } else {
-        logBar.textContent = 'Jump onto the Bell-Tower Catwalk (1020m-1200m) to ring chimes.';
-      }
-    });
-
-    document.getElementById('gate-btn').addEventListener('click', () => {
-      unlockAudio();
-      if (world.player.x >= 1775) {
-        const msg = canopy.solved ? 'CHAPTER COMPLETE: Roivas Manor gates swing open before midnight!' : 'Sealed by harmonic chime lock in Bell-Tower Canopy (Eb4 -> A4 -> D4).';
-        logBar.textContent = msg;
-        if (canopy.solved) chronicle.addEvent(msg);
-      } else {
-        logBar.textContent = 'Manor Gates lie at 1820m.';
-      }
-    });
-
-    document.getElementById('slowmo-btn').addEventListener('click', () => {
-      unlockAudio();
-      const on = arena.toggleBulletTime();
-      logBar.textContent = on ? 'BULLET-TIME FOCUS ACTIVE (0.42x speed)' : 'Bullet-Time Focus released.';
-    });
-
-    document.getElementById('parry-btn').addEventListener('click', () => {
-      unlockAudio();
-      const res = arena.parryBurst();
-      if (res.event === 'BANISHED') {
-        for (const f of world.foes) if (f.isBoss && f.danmakuTriggered) f.alive = false;
-        sound.playChime(587.33, true); eco.amberShards++;
-        const msg = 'BANISHED ' + arena.bossName + '! (+1 Amber Shard)';
-        logBar.textContent = msg; chronicle.addEvent(msg);
-      } else if (res.event === 'HIT') {
-        sound.playChime(440.0, true); logBar.textContent = 'Parried bolt! (' + res.hp + ' HP left)';
-      } else {
-        logBar.textContent = 'Graze 6+ bullets or parry close to projectiles!';
-      }
-    });
-
-    function frame() {
-      tick++;
-      exploreBar.style.display = arena.active ? 'none' : 'flex';
-      arenaBar.style.display = arena.active ? 'flex' : 'none';
-
-      if (arena.active) {
-        arena.moveSoul(moveX, moveY);
-        const res = arena.step(tick);
-        if (res.hit) world.sanityQ16 = q16Clamp(world.sanityQ16 - 4096, 0, Q16_ONE);
-      } else {
-        world.step(moveX, tick, eco.combatEnabled(), arena.active);
-      }
-
-      const px = world.player.x;
-      const zoneKey = px < 480 ? 'HARBOR' : px < 960 ? 'SQUARE' : px < 1440 ? 'CANOPY' : 'MILL';
-      const newLore = chronicle.recordDistrict(zoneKey);
-      if (newLore) logBar.textContent = newLore;
-
-      const trackKey = arena.active ? 'DANMAKU' : (zoneKey === 'CANOPY' || zoneKey === 'MILL') ? 'CANOPY' : 'HARBOR';
-      const trackName = sound.setTrack(trackKey);
-
-      canopy.step(tick, px, world.player.y);
-      fluidFog.step(px, world.player.y, world.cameraX, tick);
-      sheaf.stepLocalNeighborhood(px);
-      sound.updateTension(world.sanityQ16, arena.active, arena.slowMo);
-
-      fb.renderWorld(world, { canopy, arena, hasTuningFork: eco.items.has('TUNING_FORK') }, tick);
-      imgU32.set(fb.resolveRGBA32());
-      ctx.putImageData(imgData, 0, 0);
-
-      const zoneNames = { HARBOR: 'Foggy Harbor', SQUARE: 'Town Square', CANOPY: 'Bell-Tower Canopy', MILL: 'Old Mill & Manor Gate' };
-      const relics = Array.from(eco.items).join(', ') || 'None';
-      const stealth = world.player.hidden ? ' [HIDDEN IN DOORWAY]' : '';
-      hud.textContent =
-        'District: ' + zoneNames[zoneKey] + ' (' + px + 'm)' + stealth + ' | OST: ' + trackName + ' | Sanity: ' + ((world.sanityQ16 * 100) >> 16) + '%\n' +
-        'Attaché Case: ' + eco.amberShards + ' Amber Shards | Relics: ' + relics + (arena.active ? ' | Graze: ' + arena.grazeCount + ' | Focus: ' + (arena.focusEnergy | 0) + '%' : '');
-      
-chronicleList.innerHTML = chronicle.entries.map((e) => '• ' + e + '').join('');
-requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
-
-
-
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
