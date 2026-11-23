@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RI-Haunted-Township — Q16.16 Open-World Horror Adventure</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #040308; color: #dcd0eb; font-family: monospace; display: flex; flex-direction: column; align-items: center; padding: 8px; gap: 6px; }
+    h1 { font-size: 0.94rem; letter-spacing: 0.08em; color: #c48cff; text-align: center; }
+    #log-bar { width: 100%; max-width: 720px; background: #0c0712; border: 1px solid #3c1e4a; padding: 7px 10px; font-size: 0.76rem; color: #f0d9ff; line-height: 1.4; }
+    #viewport-wrap { position: relative; width: 100%; max-width: 720px; aspect-ratio: 480 / 272; border: 2px solid #3c1e4a; overflow: hidden; }
+    canvas { width: 100%; height: 100%; image-rendering: pixelated; display: block; touch-action: none; }
+    .controls { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; max-width: 720px; }
+    button, select { background: #140b1c; color: #eee2ff; border: 1px solid #4e2a63; padding: 6px 8px; font-family: monospace; font-size: 0.75rem; cursor: pointer; }
+    button:active { background: #36184a; }
+    button.accent { border-color: #9d4edd; color: #e0aaff; }
+    #hud { width: 100%; max-width: 720px; background: #09060e; border: 1px solid #261636; padding: 7px 10px; font-size: 0.75rem; line-height: 1.45; white-space: pre-line; }
+  </style>
+</head>
+<body>
+  <h1>🌊 RI-HAUNTED-TOWNSHIP (Q16.16 OPEN WORLD)</h1>
+  <div id="log-bar">Foggy Harbor (0m / 1920m): Roam east through the township, gather Amber Shards, trade with factions, or ring the Bell-Tower chimes (Eb4 - A4 - D4) to unseal the Manor Gate.</div>
+  <div id="viewport-wrap">
+    <canvas id="screen" width="480" height="272"></canvas>
+  </div>
+  <div class="controls">
+    <select id="mode-select">
+      <option value="RECKONING">👁️ Mode: Reckoning (Full Hybrid)</option>
+      <option value="PILGRIM">🕯️ Mode: Pilgrim (Gather & Chimes Only)</option>
+      <option value="PURGER">⚔️ Mode: Purger (Combat & Danmaku)</option>
+    </select>
+    <button id="left-btn">◀ West</button>
+    <button id="right-btn">East ▶</button>
+    <button id="up-btn">▲ Up (Arena)</button>
+    <button id="down-btn">▼ Down (Arena)</button>
+    <button id="act-btn" class="accent">🖐️ Gather / Trade / Chime / Parry</button>
+    <button id="audio-btn">🔔 Township OST</button>
+  </div>
+  <div id="hud">Initializing Township...</div>
+  <script type="module">
+    import { Q16_ONE, q16Clamp } from './src/core/q16.js';
+    import { TownshipSpatialSheaf, ALIGN } from './src/core/spatial_sheaf.js';
+    import { CanopyChimePuzzle } from './src/physics/verlet_canopy.js';
+    import { RadialFluidFog } from './src/physics/radial_fluid_fog.js';
+    import { BulletHellArena } from './src/physics/bullet_hell_arena.js';
+    import { FactionAttacheSystem } from './src/economy/faction_attache.js';
+    import { TownshipFramebuffer, FB_WIDTH, FB_HEIGHT } from './src/render/township_renderer.js';
+    import { TownshipSoundscape } from './src/audio/pentatonic_chime_synth.js';
+
+    const canvas = document.getElementById('screen');
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.createImageData(FB_WIDTH, FB_HEIGHT);
+    const imgU32 = new Uint32Array(imgData.data.buffer);
+    const logBar = document.getElementById('log-bar');
+    const hud = document.getElementById('hud');
+
+    const sheaf = new TownshipSpatialSheaf(1920, 120);
+    const canopy = new CanopyChimePuzzle();
+    const fluidFog = new RadialFluidFog();
+    const arena = new BulletHellArena();
+    const eco = new FactionAttacheSystem();
+    const fb = new TownshipFramebuffer();
+    const sound = new TownshipSoundscape();
+
+    const nodes = Array.of(
+      { x: 180, collected: false },
+      { x: 540, collected: false },
+      { x: 920, collected: false },
+      { x: 1340, collected: false },
+      { x: 1680, collected: false }
+    );
+
+    const foes = Array.of(
+      { x: 680, align: ALIGN.CHATTURGHA, name: 'Harbor Zealot', alive: true },
+      { x: 1280, align: ALIGN.XELLOTATH, name: 'Canopy Stalker', alive: true },
+      { x: 1740, align: ALIGN.MANTOROK, name: 'Manor Gatekeeper', alive: true }
+    );
+
+    const state = {
+      playerX: 110,
+      playerY: 186,
+      cameraX: 0,
+      facing: 1,
+      moving: false,
+      sanityQ16: Q16_ONE,
+      activeAlign: ALIGN.ULYAOTH,
+      hasTuningFork: false,
+      canopy,
+      fluidFog,
+      arena,
+      nodes,
+      foes
+    };
+
+    let moveX = 0, moveY = 0, tick = 0;
+
+    function unlockAudio() {
+      sound.start();
+      document.getElementById('audio-btn').textContent = '🔔 OST Active';
+    }
+    document.getElementById('audio-btn').addEventListener('click', unlockAudio);
+
+    document.getElementById('mode-select').addEventListener('change', (e) => {
+      eco.setMode(e.target.value);
+      logBar.textContent = 'Switched playstyle mode to ' + eco.mode + '.';
+    });
+
+    document.getElementById('left-btn').addEventListener('pointerdown', () => { moveX = -1; unlockAudio(); });
+    document.getElementById('right-btn').addEventListener('pointerdown', () => { moveX = 1; unlockAudio(); });
+    document.getElementById('up-btn').addEventListener('pointerdown', () => { moveY = -1; unlockAudio(); });
+    document.getElementById('down-btn').addEventListener('pointerdown', () => { moveY = 1; unlockAudio(); });
+    window.addEventListener('pointerup', () => { moveX = 0; moveY = 0; });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a') moveX = -1;
+      if (e.key === 'ArrowRight' || e.key === 'd') moveX = 1;
+      if (e.key === 'ArrowUp' || e.key === 'w') moveY = -1;
+      if (e.key === 'ArrowDown' || e.key === 's') moveY = 1;
+      if (e.key === 'e' || e.key === 'Enter' || e.key === ' ') interactOrParry();
+    });
+    window.addEventListener('keyup', (e) => {
+      if (['ArrowLeft','a','ArrowRight','d'].includes(e.key)) moveX = 0;
+      if (['ArrowUp','w','ArrowDown','s'].includes(e.key)) moveY = 0;
+    });
+
+    function interactOrParry() {
+      unlockAudio();
+      if (arena.active) {
+        const res = arena.parryBurst();
+        if (res.event === 'BANISHED') {
+          sound.playChime(587.33, true);
+          eco.amberShards++;
+          logBar.textContent = 'BANISHED ' + arena.bossName + '! Recovered +1 Amber Shard.';
+        } else if (res.event === 'HIT') {
+          sound.playChime(440.0, true);
+          logBar.textContent = 'Parried eldritch bolt into ' + arena.bossName + '! (' + res.hp + ' HP left)';
+        } else {
+          logBar.textContent = 'Graze bullets (8+ Graze) or parry near projectiles to strike!';
+        }
+        return;
+      }
+
+      // 1. Gather Amber Shards
+      for (const n of nodes) {
+        if (!n.collected && Math.abs(state.playerX - n.x) < 32) {
+          n.collected = true;
+          eco.amberShards++;
+          sound.playChime(466.16, true);
+          logBar.textContent = 'Gathered Amber Resin Shard (+1 Shard).';
+          return;
+        }
+      }
+
+      // 2. Trade with Township Factions
+      const trade = eco.tradeWithNearestFaction(state.playerX);
+      if (trade) {
+        state.hasTuningFork = eco.items.has('TUNING_FORK');
+        if (eco.items.has('VITALITY_TINCTURE')) state.sanityQ16 = Q16_ONE;
+        sound.playChime(392.0, true);
+        logBar.textContent = trade.msg;
+        return;
+      }
+
+      // 3. Ring Pentatonic Canopy Chimes
+      const chimeHit = canopy.ringNearestChime(state.playerX);
+      if (chimeHit) {
+        sound.playChime(chimeHit.chime.hz, true);
+        logBar.textContent = chimeHit.solved
+          ? 'CHIME LOCK UNSEALED! The Manor Gate at the eastern edge (1820m) is now open!'
+          : 'Struck chime ' + chimeHit.chime.note + ' (Hint: Eb4 -> A4 -> D4).';
+        return;
+      }
+
+      // 4. Enter Manor Gate at x >= 1790
+      if (state.playerX >= 1790) {
+        logBar.textContent = canopy.solved
+          ? 'VICTORY! You traversed RI-Haunted-Township, unlocked the chime seal, and entered Roivas Manor!'
+          : 'The Manor Gate is sealed by a pentatonic chime lock in the Bell-Tower Canopy (1020m-1200m).';
+        return;
+      }
+
+      logBar.textContent = 'Cold sea fog curls around your boots. Keep exploring east or west.';
+    }
+    document.getElementById('act-btn').addEventListener('click', interactOrParry);
+
+    function frame() {
+      tick++;
+      if (arena.active) {
+        arena.moveSoul(moveX, moveY);
+        const res = arena.step(tick);
+        if (res.hit) state.sanityQ16 = q16Clamp(state.sanityQ16 - 4096, 0, Q16_ONE);
+      } else {
+        state.moving = moveX !== 0;
+        if (moveX !== 0) {
+          state.facing = moveX > 0 ? 1 : -1;
+          state.playerX = q16Clamp(state.playerX + moveX * 3, 24, 1890);
+        }
+        state.cameraX = q16Clamp(state.playerX - 180, 0, 1920 - FB_WIDTH);
+
+        if (eco.combatEnabled()) {
+          for (const f of foes) {
+            if (f.alive && Math.abs(state.playerX - f.x) < 28) {
+              f.alive = false;
+              state.activeAlign = f.align;
+              arena.startEncounter(f.name, f.align, eco.items.has('BRONZE_GLADIUS') ? 2 : 3);
+              logBar.textContent = 'AMBUSH! ' + f.name + ' pulls you into a Danmaku ring! Dodge and tap [Parry]!';
+              break;
+            }
+          }
+        }
+      }
+
+      canopy.step(tick, state.playerX, state.playerY);
+      fluidFog.step(state.playerX, state.playerY, state.cameraX, tick);
+      const tension = sheaf.stepLocalNeighborhood(state.playerX);
+      sound.updateTension(state.sanityQ16, arena.active);
+
+      fb.renderWorld(state, tick);
+      imgU32.set(fb.resolveRGBA32());
+      ctx.putImageData(imgData, 0, 0);
+
+      const zone = state.playerX < 480 ? 'Foggy Harbor' : state.playerX < 960 ? 'Town Square' : state.playerX < 1440 ? 'Bell-Tower Canopy' : 'Old Mill & Manor Gate';
+      const relics = Array.from(eco.items).join(', ') || 'None';
+      hud.textContent =
+        'District: ' + zone + ' (' + state.playerX + 'm / 1920m) | Mode: ' + eco.mode + ' | Sanity: ' + ((state.sanityQ16 * 100) >> 16) + '%\n' +
+        'Attaché Case: ' + eco.amberShards + ' Amber Shards | Relics: ' + relics + (arena.active ? ' | Graze: ' + arena.grazeCount : '');
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

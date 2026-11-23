@@ -1,0 +1,9 @@
+{
+  "name": "ri-haunted-township",
+  "version": "1.0.0-alpha",
+  "type": "module",
+  "description": "Open-world Q16.16 Rhode Island horror-adventure uniting Verlet chimes, radial fluid fog, bullet-hell encounters, and RE4 faction economy",
+  "scripts": {
+    "test": "node tests/township_suite_test.js"
+  }
+}
